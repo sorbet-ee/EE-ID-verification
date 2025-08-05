@@ -1,24 +1,24 @@
 # frozen_string_literal: true
 
-require_relative "lib/EE/ID/verification/version"
+require_relative "lib/ee_id_verification/version"
 
 Gem::Specification.new do |spec|
   spec.name = "EE-ID-verification"
-  spec.version = EE::ID::Verification::VERSION
+  spec.version = EeIdVerification::VERSION
   spec.authors = ["Angelos Kapsimanis"]
   spec.email = ["angelos@sorbet.ee"]
 
-  spec.summary = "TODO: Write a short summary, because RubyGems requires one."
-  spec.description = "TODO: Write a longer description or delete this line."
-  spec.homepage = "TODO: Put your gem's website or public repo URL here."
+  spec.summary = "Estonian identity verification for Ruby applications"
+  spec.description = "A comprehensive Ruby gem for Estonian digital identity verification supporting DigiDoc, Mobile-ID, and Smart-ID authentication methods. Provides a unified interface for secure authentication and digital signature verification using Estonia's e-identity infrastructure."
+  spec.homepage = "https://github.com/[USERNAME]/EE-ID-verification"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
-  spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
+  spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "TODO: Put your gem's public repo URL here."
-  spec.metadata["changelog_uri"] = "TODO: Put your gem's CHANGELOG.md URL here."
+  spec.metadata["source_code_uri"] = "https://github.com/sorbet-ee/EE-ID-verification"
+  spec.metadata["changelog_uri"] = "https://github.com/sorbet-ee/EE-ID-verification/blob/master/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
@@ -33,8 +33,11 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  # Uncomment to register a new dependency of your gem
-  # spec.add_dependency "example-gem", "~> 1.0"
+  # Dependencies for ID card reading and certificate handling
+  spec.add_dependency "smartcard", "~> 0.5"  # PC/SC smart card interface
+  spec.add_dependency "openssl", "~> 3.0"    # Certificate handling
+  spec.add_dependency "net-http", "~> 0.3"   # HTTP client for OCSP
+  spec.add_dependency "rexml", "~> 3.2"      # XML parsing for certificates
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

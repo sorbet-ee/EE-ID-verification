@@ -1,28 +1,131 @@
 # EE::ID::Verification
 
-TODO: Delete this and the text below, and describe your gem
+A Ruby gem for Estonian identity verification supporting DigiDoc, Mobile-ID, and Smart-ID authentication methods.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/EE/ID/verification`. To experiment with that code, run `bin/console` for an interactive prompt.
+This gem provides a unified interface for verifying Estonian digital identities through the country's official e-identity infrastructure, enabling secure authentication and digital signature verification in Ruby applications.
+
+## Features
+
+- **DigiDoc** support for ID-card based authentication
+- **Mobile-ID** verification for mobile phone-based authentication
+- **Smart-ID** integration for app-based authentication
+- Unified API for all authentication methods
+- Certificate validation and parsing
+- Personal data extraction (name, personal code, etc.)
+- Session management for authentication flows
 
 ## Installation
-
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
 
 Install the gem and add to the application's Gemfile by executing:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle add EE-ID-verification
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install EE-ID-verification
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+### Basic Authentication Example
+
+```ruby
+require 'ee_id_verification'
+
+# Initialize the verifier
+verifier = EeIdVerification.new
+
+# Mobile-ID authentication
+mobile_auth = verifier.mobile_id_auth(
+  phone_number: '+3725xxxxxxx',
+  personal_code: '38001010101'
+)
+
+# Wait for user to confirm on mobile device
+result = mobile_auth.poll_status
+
+if result.authenticated?
+  puts "User authenticated: #{result.name}"
+  puts "Personal code: #{result.personal_code}"
+end
+
+# Smart-ID authentication
+smart_auth = verifier.smart_id_auth(
+  personal_code: '38001010101'
+)
+
+# DigiDoc (ID-card) authentication
+digidoc_auth = verifier.digidoc_auth(
+  certificate: user_provided_certificate
+)
+```
+
+### Configuration
+
+```ruby
+EeIdVerification.configure do |config|
+  config.mobile_id_url = 'https://your-mobile-id-service.ee'
+  config.smart_id_url = 'https://your-smart-id-service.ee'
+  config.digidoc_service_url = 'https://your-digidoc-service.ee'
+  
+  # Optional: Set timeouts
+  config.timeout = 30 # seconds
+  config.poll_interval = 5 # seconds
+end
+```
+
+### Digital Signature Verification
+
+```ruby
+# Verify a digitally signed document
+signature_valid = verifier.verify_signature(
+  document: document_data,
+  signature: signature_data,
+  certificate: signer_certificate
+)
+```
+
+## ID Card Scripts
+
+The `script/` directory contains utility scripts for testing ID card functionality:
+
+### Prerequisites for ID Card Usage
+
+1. **Card Reader**: Smart card reader connected to your computer
+2. **Drivers**: Card reader drivers installed
+3. **PC/SC Service**: Running on your system
+   - macOS: Usually running by default
+   - Linux: `sudo systemctl start pcscd`
+   - Windows: Smart Card service
+
+### Available Scripts
+
+#### Test Card Reader
+```bash
+ruby script/test_card_reader.rb
+```
+Tests connectivity and detects Estonian ID cards.
+
+#### Read ID Card Data
+```bash
+ruby script/read_id_card.rb
+```
+Reads personal information and optionally authenticates with PIN1.
+
+#### Extract Certificates
+```bash
+ruby script/extract_certificates.rb        # Display certificate info
+ruby script/extract_certificates.rb --save  # Save certificates to files
+```
+Extracts authentication and signing certificates from the ID card.
+
+### Security Notes
+- **PIN codes are sensitive** - never share or store them
+- You have **3 attempts** per PIN before it's blocked
+- Certificates contain personal information
 
 ## Development
 

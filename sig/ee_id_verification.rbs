@@ -1,0 +1,10 @@
+module EeIdVerification
+  VERSION: String
+  
+  class Error < StandardError
+  end
+  
+  def self.new: (?Hash[Symbol, untyped] config) -> Verifier
+  def self.configure: () { (Configuration) -> void } -> Configuration
+  def self.configuration: () -> Configuration
+end

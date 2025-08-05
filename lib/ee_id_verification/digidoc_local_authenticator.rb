@@ -76,27 +76,25 @@ module EeIdVerification
     #   puts session.personal_code # => "38001085718"
     def initiate_authentication(params = {})
       validate_authentication_params!(params)
-      
+
       # Check if card reader and card are available
-      unless @reader.card_present?
-        raise AuthenticationError, "No Estonian ID card detected. Please insert your ID card."
-      end
+      raise AuthenticationError, "No Estonian ID card detected. Please insert your ID card." unless @reader.card_present?
 
       begin
         # Connect to the card
         @reader.connect
-        
+
         # Read authentication certificate without PIN for session setup
         # We'll verify PIN later during actual authentication
         begin
           # Try to read certificate info without PIN (for session setup)
           # PIN will be required during perform_authentication
           personal_data = { personal_code: "Unknown", given_name: "Unknown", surname: "Unknown" }
-        rescue => e
+        rescue StandardError
           # Certificate reading will happen during PIN authentication
           personal_data = { personal_code: "Unknown", given_name: "Unknown", surname: "Unknown" }
         end
-        
+
         # Create authentication session with certificate data
         session = AuthenticationSession.new(
           id: generate_session_id,
@@ -110,16 +108,20 @@ module EeIdVerification
             challenge: generate_challenge # For replay attack prevention
           }
         )
-        
+
         # Store session for PIN verification step
         @sessions[session.id] = session
-        
+
         # Disconnect temporarily - will reconnect when PIN is provided
         @reader.disconnect
-        
+
         session
-      rescue => e
-        @reader.disconnect rescue nil
+      rescue StandardError => e
+        begin
+          @reader.disconnect
+        rescue StandardError
+          nil
+        end
         raise AuthenticationError, "Failed to read ID card: #{e.message}"
       end
     end
@@ -153,9 +155,9 @@ module EeIdVerification
     def poll_status(session)
       validate_session!(session)
       stored_session = @sessions[session.id]
-      
+
       return create_failed_result(session.id, "Session not found") unless stored_session
-      
+
       # Check if PIN has been provided for authentication
       if stored_session.metadata[:pin_provided]
         # PIN available - perform actual authentication with card
@@ -192,7 +194,7 @@ module EeIdVerification
     def provide_pin(session_id, pin)
       session = @sessions[session_id]
       return false unless session
-      
+
       # Store PIN for authentication (cleared after use)
       session.metadata[:pin] = pin
       session.metadata[:pin_provided] = true
@@ -213,13 +215,17 @@ module EeIdVerification
     #   authenticator.cancel_authentication(session)
     def cancel_authentication(session)
       validate_session!(session)
-      
+
       # Remove session from memory
       @sessions.delete(session.id)
-      
+
       # Ensure card reader is disconnected (ignore errors)
-      @reader.disconnect rescue nil
-      
+      begin
+        @reader.disconnect
+      rescue StandardError
+        nil
+      end
+
       true
     end
 
@@ -248,30 +254,28 @@ module EeIdVerification
     #   puts "Valid: #{result.valid?}" # => "Valid: true"
     #   puts "Signer: #{result.signer_info[:common_name]}"
     def verify_signature(document:, signature:, certificate:)
-      begin
-        cert = parse_certificate(certificate)
-        
-        # Perform cryptographic signature verification
-        digest = OpenSSL::Digest::SHA256.new
-        verified = cert.public_key.verify(digest, signature, document)
-        
-        # Validate certificate properties (time, issuer, etc.)
-        validity_errors = check_certificate_validity(cert)
-        
-        SignatureVerificationResult.new(
-          valid: verified && validity_errors.empty?,
-          signer_certificate: cert,
-          signer_info: @reader.extract_personal_data(cert),
-          signed_at: extract_signing_time(signature),
-          signature_level: "QES", # Qualified Electronic Signature per eIDAS
-          errors: verified ? validity_errors : ["Invalid signature"] + validity_errors
-        )
-      rescue => e
-        SignatureVerificationResult.new(
-          valid: false,
-          errors: ["Signature verification failed: #{e.message}"]
-        )
-      end
+      cert = parse_certificate(certificate)
+
+      # Perform cryptographic signature verification
+      digest = OpenSSL::Digest.new("SHA256")
+      verified = cert.public_key.verify(digest, signature, document)
+
+      # Validate certificate properties (time, issuer, etc.)
+      validity_errors = check_certificate_validity(cert)
+
+      SignatureVerificationResult.new(
+        valid: verified && validity_errors.empty?,
+        signer_certificate: cert,
+        signer_info: @reader.extract_personal_data(cert),
+        signed_at: extract_signing_time(signature),
+        signature_level: "QES", # Qualified Electronic Signature per eIDAS
+        errors: verified ? validity_errors : ["Invalid signature"] + validity_errors
+      )
+    rescue StandardError => e
+      SignatureVerificationResult.new(
+        valid: false,
+        errors: ["Signature verification failed: #{e.message}"]
+      )
     end
 
     # Check if DigiDoc local authentication is available.
@@ -319,10 +323,10 @@ module EeIdVerification
     # @raise [ConfigurationError] If any configuration value is invalid
     def validate_config!
       super
-      
-      unless config[:pin_retry_count].is_a?(Integer) && config[:pin_retry_count] > 0
-        raise ConfigurationError, "Invalid PIN retry count: must be positive integer"
-      end
+
+      return if config[:pin_retry_count].is_a?(Integer) && config[:pin_retry_count].positive?
+
+      raise ConfigurationError, "Invalid PIN retry count: must be positive integer"
     end
 
     private
@@ -360,58 +364,57 @@ module EeIdVerification
     # @return [AuthenticationResult] Final authentication result
     # @private
     def perform_authentication(session)
+      # Reconnect to the card for PIN verification
+      @reader.connect
+
+      # Authenticate with PIN1 to unlock authentication certificate
+      pin = session.metadata[:pin]
+      auth_cert = @reader.read_auth_certificate(pin)
+
+      # Verify certificate status via OCSP if required
+      if config[:require_ocsp]
+        ocsp_valid = verify_ocsp(auth_cert)
+        return create_failed_result(session.id, "Certificate revoked or OCSP check failed") unless ocsp_valid
+      end
+
+      # Extract personal information from certificate
+      personal_data = @reader.extract_personal_data(auth_cert)
+
+      # Update session status
+      session.status = :completed
+
+      # Clear PIN from memory for security
+      session.metadata[:pin] = nil
+
+      # Create successful authentication result
+      AuthenticationResult.new(
+        session_id: session.id,
+        status: :completed,
+        authenticated: true,
+        personal_code: personal_data[:personal_code],
+        given_name: personal_data[:given_name],
+        surname: personal_data[:surname],
+        country: personal_data[:country],
+        certificate: auth_cert,
+        certificate_level: "QSCD", # Qualified Signature Creation Device
+        metadata: {
+          common_name: personal_data[:common_name],
+          authentication_method: "PIN1",
+          card_type: "Estonian ID Card"
+        }
+      )
+    rescue RuntimeError => e
+      create_failed_result(session.id, e.message)
+    rescue StandardError => e
+      create_failed_result(session.id, e.message)
+    ensure
+      # Always disconnect to free card for other applications
       begin
-        # Reconnect to the card for PIN verification
-        @reader.connect
-        
-        # Authenticate with PIN1 to unlock authentication certificate
-        pin = session.metadata[:pin]
-        auth_cert = @reader.read_auth_certificate(pin)
-        
-        # Verify certificate status via OCSP if required
-        if config[:require_ocsp]
-          ocsp_valid = verify_ocsp(auth_cert)
-          unless ocsp_valid
-            return create_failed_result(session.id, "Certificate revoked or OCSP check failed")
-          end
-        end
-        
-        # Extract personal information from certificate
-        personal_data = @reader.extract_personal_data(auth_cert)
-        
-        # Update session status
-        session.status = :completed
-        
-        # Clear PIN from memory for security
-        session.metadata[:pin] = nil
-        
-        # Create successful authentication result
-        AuthenticationResult.new(
-          session_id: session.id,
-          status: :completed,
-          authenticated: true,
-          personal_code: personal_data[:personal_code],
-          given_name: personal_data[:given_name],
-          surname: personal_data[:surname],
-          country: personal_data[:country],
-          certificate: auth_cert,
-          certificate_level: "QSCD", # Qualified Signature Creation Device
-          metadata: {
-            common_name: personal_data[:common_name],
-            authentication_method: "PIN1",
-            card_type: "Estonian ID Card"
-          }
-        )
-      rescue RuntimeError => e
-        create_failed_result(session.id, e.message)
-      rescue => e
-        create_failed_result(session.id, e.message)
-      ensure
-        # Always disconnect to free card for other applications
-        @reader.disconnect rescue nil
+        @reader.disconnect
+      rescue StandardError
+        nil
       end
     end
-
 
     # Create a failed authentication result.
     #
@@ -476,7 +479,7 @@ module EeIdVerification
     # @private
     def check_certificate_validity(cert)
       errors = []
-      
+
       # Validate certificate time bounds
       now = Time.now
       if now < cert.not_before
@@ -484,13 +487,13 @@ module EeIdVerification
       elsif now > cert.not_after
         errors << "Certificate expired on #{cert.not_after}"
       end
-      
+
       # Ensure it's an Estonian certificate from trusted CA
       issuer = cert.issuer.to_s
       unless issuer.include?("ESTEID") || issuer.include?("SK ID Solutions")
         errors << "Not an Estonian ID certificate (issuer: #{issuer})"
       end
-      
+
       errors
     end
 
@@ -509,47 +512,45 @@ module EeIdVerification
     # @return [Boolean] true if certificate is valid, false if revoked or check failed
     # @private
     def verify_ocsp(certificate)
-      begin
-        ocsp_uri = URI(config[:ocsp_url])
-        
-        # Create OCSP request for certificate status
-        cert_id = OpenSSL::OCSP::CertificateId.new(
-          certificate,
-          get_issuer_certificate(certificate)
-        )
-        request = OpenSSL::OCSP::Request.new
-        request.add_certid(cert_id)
-        
-        # Send OCSP request to Estonian OCSP service
-        http = Net::HTTP.new(ocsp_uri.host, ocsp_uri.port)
-        http.use_ssl = ocsp_uri.scheme == "https"
-        http.read_timeout = 10 # Prevent hanging on network issues
-        
-        response = http.post(
-          ocsp_uri.path,
-          request.to_der,
-          "Content-Type" => "application/ocsp-request"
-        )
-        
-        # Parse and validate OCSP response
-        ocsp_response = OpenSSL::OCSP::Response.new(response.body)
-        
-        # Check if OCSP service responded successfully
-        return false unless ocsp_response.status == OpenSSL::OCSP::RESPONSE_STATUS_SUCCESSFUL
-        
-        # Check individual certificate status
-        basic_response = ocsp_response.basic
-        basic_response.status.each do |status|
-          # Only accept GOOD status - reject REVOKED or UNKNOWN
-          return false unless status[1] == OpenSSL::OCSP::V_CERTSTATUS_GOOD
-        end
-        
-        true
-      rescue
-        # OCSP service unreachable - fail safely
-        # In production, consider caching previous OCSP responses
-        false
+      ocsp_uri = URI(config[:ocsp_url])
+
+      # Create OCSP request for certificate status
+      cert_id = OpenSSL::OCSP::CertificateId.new(
+        certificate,
+        get_issuer_certificate(certificate)
+      )
+      request = OpenSSL::OCSP::Request.new
+      request.add_certid(cert_id)
+
+      # Send OCSP request to Estonian OCSP service
+      http = Net::HTTP.new(ocsp_uri.host, ocsp_uri.port)
+      http.use_ssl = ocsp_uri.scheme == "https"
+      http.read_timeout = 10 # Prevent hanging on network issues
+
+      response = http.post(
+        ocsp_uri.path,
+        request.to_der,
+        "Content-Type" => "application/ocsp-request"
+      )
+
+      # Parse and validate OCSP response
+      ocsp_response = OpenSSL::OCSP::Response.new(response.body)
+
+      # Check if OCSP service responded successfully
+      return false unless ocsp_response.status == OpenSSL::OCSP::RESPONSE_STATUS_SUCCESSFUL
+
+      # Check individual certificate status
+      basic_response = ocsp_response.basic
+      basic_response.status.each do |status|
+        # Only accept GOOD status - reject REVOKED or UNKNOWN
+        return false unless status[1] == OpenSSL::OCSP::V_CERTSTATUS_GOOD
       end
+
+      true
+    rescue StandardError
+      # OCSP service unreachable - fail safely
+      # In production, consider caching previous OCSP responses
+      false
     end
 
     # Get the issuer certificate for OCSP verification.
@@ -579,7 +580,7 @@ module EeIdVerification
     # @return [Time] When the signature was created
     # @private
     # @todo Implement proper signature timestamp extraction
-    def extract_signing_time(signature)
+    def extract_signing_time(_signature)
       # TODO: Parse signature attributes for signing-time or timestamp
       # For now, assume signature was created recently
       Time.now

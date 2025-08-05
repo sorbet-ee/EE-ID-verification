@@ -68,8 +68,8 @@ module EeIdVerification
     #   puts "Show this code to user: #{session.verification_code}"
     def initiate_authentication(params = {})
       validate_authentication_params!(params)
-      
-      session = AuthenticationSession.new(
+
+      AuthenticationSession.new(
         id: generate_session_id,
         method: :mobile_id,
         status: :pending,
@@ -87,8 +87,6 @@ module EeIdVerification
       # 2. Receive session ID from service for status polling
       # 3. Store service session ID for later status checks
       # 4. Handle service-specific error conditions
-      
-      session
     end
 
     # Poll the Mobile-ID service for authentication status.
@@ -125,7 +123,7 @@ module EeIdVerification
     #   end
     def poll_status(session)
       validate_session!(session)
-      
+
       # TODO: Implement complete Mobile-ID service polling
       # This would:
       # 1. Query Mobile-ID service with session ID
@@ -133,7 +131,7 @@ module EeIdVerification
       # 3. Retrieve and validate authentication certificate on success
       # 4. Extract personal data from certificate
       # 5. Perform certificate chain and OCSP validation
-      
+
       AuthenticationResult.new(
         session_id: session.id,
         status: :pending,
@@ -162,13 +160,13 @@ module EeIdVerification
     #   end
     def cancel_authentication(session)
       validate_session!(session)
-      
+
       # TODO: Implement complete Mobile-ID session cancellation
       # This would:
       # 1. Send cancellation request to Mobile-ID service
       # 2. Clean up local session data
       # 3. Handle service response and error conditions
-      
+
       true
     end
 
@@ -207,7 +205,7 @@ module EeIdVerification
       # 4. Check certificate revocation status via OCSP
       # 5. Validate Mobile-ID specific certificate policies
       # 6. Extract signer information from certificate
-      
+
       SignatureVerificationResult.new(
         valid: false,
         errors: ["Mobile-ID signature verification not yet implemented"]
@@ -264,18 +262,16 @@ module EeIdVerification
     # @raise [ArgumentError] If required configuration is missing
     def validate_config!
       super
-      
+
       # Only validate if actually configured (otherwise just mark unavailable)
-      if config[:service_url] && config[:service_uuid]
-        # Validate service URL format
-        begin
-          uri = URI.parse(config[:service_url])
-          unless uri.scheme == "https"
-            raise ArgumentError, "Mobile-ID service URL must use HTTPS for security"
-          end
-        rescue URI::InvalidURIError
-          raise ArgumentError, "Invalid Mobile-ID service URL format"
-        end
+      return unless config[:service_url] && config[:service_uuid]
+
+      # Validate service URL format
+      begin
+        uri = URI.parse(config[:service_url])
+        raise ArgumentError, "Mobile-ID service URL must use HTTPS for security" unless uri.scheme == "https"
+      rescue URI::InvalidURIError
+        raise ArgumentError, "Invalid Mobile-ID service URL format"
       end
     end
 
@@ -290,23 +286,19 @@ module EeIdVerification
     # @param params [Hash] Authentication parameters
     # @raise [ArgumentError] If parameters are missing or invalid
     def validate_authentication_params!(params)
-      unless params[:phone_number]
-        raise ArgumentError, "Phone number is required for Mobile-ID authentication"
-      end
+      raise ArgumentError, "Phone number is required for Mobile-ID authentication" unless params[:phone_number]
 
-      unless params[:personal_code]
-        raise ArgumentError, "Personal code is required to identify Mobile-ID certificate"
-      end
+      raise ArgumentError, "Personal code is required to identify Mobile-ID certificate" unless params[:personal_code]
 
       unless valid_personal_code?(params[:personal_code])
         raise ArgumentError, "Invalid Estonian personal code format (expected 11 digits)"
       end
-      
+
       # Validate phone number format
       normalized_phone = normalize_phone_number(params[:phone_number])
-      unless normalized_phone.match?(/^\+\d{8,15}$/)
-        raise ArgumentError, "Invalid phone number format (include country code)"
-      end
+      return if normalized_phone.match?(/^\+\d{8,15}$/)
+
+      raise ArgumentError, "Invalid phone number format (include country code)"
     end
 
     # Validate a Mobile-ID authentication session.
@@ -334,13 +326,13 @@ module EeIdVerification
     def normalize_phone_number(phone)
       # Remove spaces, dashes, and other non-digit characters
       normalized = phone.gsub(/[^0-9+]/, "")
-      
+
       # Add Estonian country code if missing
       if normalized.match?(/^[0-9]/) && !normalized.start_with?("+")
         # Assume Estonian number if no country code
         normalized = "#{config[:phone_number_country_code]}#{normalized}"
       end
-      
+
       normalized
     end
 
@@ -362,16 +354,16 @@ module EeIdVerification
     def valid_personal_code?(code)
       # Basic format validation
       return false unless code.match?(/^\d{11}$/)
-      
+
       # Validate century/gender digit (1-6)
       century_digit = code[0].to_i
       return false unless (1..6).include?(century_digit)
-      
+
       # TODO: Implement complete validation including:
       # 1. Birth date validation (positions 2-7)
       # 2. Checksum algorithm validation (position 11)
       # 3. Cross-reference with official validation rules
-      
+
       true
     end
 
@@ -388,7 +380,7 @@ module EeIdVerification
     end
 
     # Mobile-ID specific helper methods
-    
+
     # Build authentication request for Mobile-ID REST API.
     #
     # Creates the JSON request structure required by the Mobile-ID service.

@@ -34,7 +34,7 @@ require_relative "ee_id_verification/models"
 # ## Basic Usage
 #
 #     require 'ee_id_verification'
-#     
+#
 #     # Create verifier with Mobile-ID configuration
 #     verifier = EeIdVerification.new(
 #       mobile_id: {
@@ -43,18 +43,18 @@ require_relative "ee_id_verification/models"
 #         service_name: "Demo Application"
 #       }
 #     )
-#     
+#
 #     # Check available methods
 #     puts verifier.available_methods # => [:mobile_id]
-#     
+#
 #     # Authenticate user
 #     session = verifier.mobile_id_auth(
 #       phone_number: "+37200000766",
 #       personal_code: "60001019906"
 #     )
-#     
+#
 #     puts "Verification code: #{session.verification_code}"
-#     
+#
 #     # Poll for completion
 #     loop do
 #       result = verifier.poll_status(session)

@@ -41,16 +41,16 @@ module EeIdVerification
   #     },
   #     timeout: 300
   #   )
-  #   
+  #
   #   # Check available methods
   #   puts verifier.available_methods # => [:mobile_id, :smart_id]
-  #   
+  #
   #   # Authenticate user
   #   session = verifier.mobile_id_auth(
   #     phone_number: "+37200000766",
   #     personal_code: "60001019906"
   #   )
-  #   
+  #
   #   # Poll for result
   #   result = verifier.poll_status(session)
   #   puts "Welcome #{result.full_name}!" if result.success?
@@ -61,7 +61,7 @@ module EeIdVerification
     # Configuration object containing all authenticator settings
     # @return [Configuration] Immutable configuration
     attr_reader :config
-    
+
     # Hash of initialized authenticator instances keyed by method symbol
     # @return [Hash<Symbol, BaseAuthenticator>] Available authenticators
     attr_reader :authenticators
@@ -285,7 +285,7 @@ module EeIdVerification
     #     signature: signature_bytes,
     #     certificate: signer_certificate
     #   )
-    #   
+    #
     #   if result.valid?
     #     puts "Valid signature by #{result.signer_info[:common_name]}"
     #     puts "Signature level: #{result.signature_level}"
@@ -295,9 +295,9 @@ module EeIdVerification
     def verify_signature(method:, document:, signature:, certificate:)
       authenticator = authenticators[method]
       unless authenticator
-        raise ArgumentError, "Unknown authentication method: #{method}. Available: #{authenticators.keys.join(', ')}"
+        raise ArgumentError, "Unknown authentication method: #{method}. Available: #{authenticators.keys.join(", ")}"
       end
-      
+
       authenticator.verify_signature(
         document: document,
         signature: signature,
@@ -316,7 +316,7 @@ module EeIdVerification
     # @example
     #   methods = verifier.available_methods
     #   # => [:digidoc_local, :mobile_id, :smart_id]
-    #   
+    #
     #   methods.each do |method|
     #     puts "#{method} is available"
     #   end
@@ -401,7 +401,7 @@ module EeIdVerification
           @config.smart_id_config.merge(common_config)
         )
       }
-    rescue => e
+    rescue StandardError => e
       # Re-raise configuration errors with context
       raise ConfigurationError, "Failed to initialize authenticators: #{e.message}"
     end
@@ -429,13 +429,12 @@ module EeIdVerification
     # @raise [ArgumentError] If session is invalid or method is unknown
     # @private
     def authenticator_for_session(session)
-      unless session.respond_to?(:method)
-        raise ArgumentError, "Invalid session object: missing method attribute"
-      end
+      raise ArgumentError, "Invalid session object: missing method attribute" unless session.respond_to?(:method)
 
       authenticator = @authenticators[session.method]
       unless authenticator
-        raise ArgumentError, "Unknown authentication method: #{session.method}. Available: #{@authenticators.keys.join(', ')}"
+        raise ArgumentError,
+              "Unknown authentication method: #{session.method}. Available: #{@authenticators.keys.join(", ")}"
       end
 
       authenticator
@@ -448,9 +447,9 @@ module EeIdVerification
     # @raise [ServiceUnavailableError] If authenticator is not available
     # @private
     def ensure_available!(authenticator, name)
-      unless authenticator.available?
-        raise ServiceUnavailableError, "#{name} is not available or not configured properly"
-      end
+      return if authenticator.available?
+
+      raise ServiceUnavailableError, "#{name} is not available or not configured properly"
     end
   end
 end

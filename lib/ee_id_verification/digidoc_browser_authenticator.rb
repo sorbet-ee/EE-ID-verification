@@ -58,8 +58,8 @@ module EeIdVerification
     #   # Pass session.id and session.challenge to browser JavaScript
     def initiate_authentication(params = {})
       validate_authentication_params!(params)
-      
-      session = AuthenticationSession.new(
+
+      AuthenticationSession.new(
         id: generate_session_id,
         method: :digidoc_browser,
         status: :pending,
@@ -75,8 +75,6 @@ module EeIdVerification
       # 2. Providing JavaScript integration code
       # 3. Handling secure browser extension communication
       # 4. Managing session state during async browser operations
-      
-      session
     end
 
     # Poll the current status of a browser authentication session.
@@ -106,14 +104,14 @@ module EeIdVerification
     #   end
     def poll_status(session)
       validate_session!(session)
-      
+
       # TODO: Check if browser extension has completed authentication
       # This would:
       # 1. Check server-side session storage for browser callback data
       # 2. Verify browser response signature against challenge
       # 3. Extract and validate user certificate data
       # 4. Perform certificate chain and OCSP validation
-      
+
       AuthenticationResult.new(
         session_id: session.id,
         status: :pending,
@@ -139,13 +137,13 @@ module EeIdVerification
     #   authenticator.cancel_authentication(session)
     def cancel_authentication(session)
       validate_session!(session)
-      
+
       # TODO: Implement complete session cleanup
       # This would:
       # 1. Remove session from server-side storage
       # 2. Notify waiting browser connections via WebSocket/polling
       # 3. Clear any cached authentication state
-      
+
       true
     end
 
@@ -180,7 +178,7 @@ module EeIdVerification
       # 2. Validate signature against document using certificate public key
       # 3. Verify certificate chain and revocation status
       # 4. Handle any browser-specific signature attributes
-      
+
       SignatureVerificationResult.new(
         valid: false,
         errors: ["Browser signature verification not yet implemented"]
@@ -233,24 +231,29 @@ module EeIdVerification
     #
     # Ensures security-critical settings are properly configured to prevent
     # cross-origin attacks and unauthorized authentication attempts.
-    # 
+    #
     # Note: Validation is lenient during initialization since configuration
     # is checked in available? method and during actual usage.
     #
     # @raise [ArgumentError] If configuration is invalid or insecure
     def validate_config!
       super
-      
+
       # Only validate if actually configured (otherwise just mark unavailable)
-      if !config[:allowed_origins].empty? || config[:origin]
-        # Validate that origins use HTTPS in production
-        all_origins = [config[:origin], *config[:allowed_origins]].compact
-        all_origins.each do |origin|
-          next if origin == "*" # Wildcard for development only
-          uri = URI.parse(origin) rescue nil
-          if uri && uri.scheme == "http" && !uri.host&.start_with?("localhost", "127.0.0.1")
-            # Log warning for HTTP origins in production
-          end
+      return unless !config[:allowed_origins].empty? || config[:origin]
+
+      # Validate that origins use HTTPS in production
+      all_origins = [config[:origin], *config[:allowed_origins]].compact
+      all_origins.each do |origin|
+        next if origin == "*" # Wildcard for development only
+
+        uri = begin
+          URI.parse(origin)
+        rescue StandardError
+          nil
+        end
+        if uri && uri.scheme == "http" && !uri.host&.start_with?("localhost", "127.0.0.1")
+          # Log warning for HTTP origins in production
         end
       end
     end
@@ -265,13 +268,11 @@ module EeIdVerification
     # @param params [Hash] Authentication parameters
     # @raise [ArgumentError] If origin is missing or not whitelisted
     def validate_authentication_params!(params)
-      unless params[:origin] || config[:origin]
-        raise ArgumentError, "Origin is required for browser authentication security"
-      end
+      raise ArgumentError, "Origin is required for browser authentication security" unless params[:origin] || config[:origin]
 
-      if params[:origin] && !allowed_origin?(params[:origin])
-        raise ArgumentError, "Origin not allowed: #{params[:origin]}. Check allowed_origins configuration."
-      end
+      return unless params[:origin] && !allowed_origin?(params[:origin])
+
+      raise ArgumentError, "Origin not allowed: #{params[:origin]}. Check allowed_origins configuration."
     end
 
     # Validate a browser authentication session.
@@ -295,7 +296,7 @@ module EeIdVerification
     def allowed_origin?(origin)
       # Wildcard allows all origins (development only)
       return true if config[:allowed_origins].include?("*")
-      
+
       # Check against whitelist and default origin
       config[:allowed_origins].include?(origin) || config[:origin] == origin
     end
@@ -313,7 +314,7 @@ module EeIdVerification
     end
 
     # Helper methods for browser integration
-    
+
     # Generate authentication request object for browser extension.
     #
     # Creates a structured request that can be passed to browser JavaScript
@@ -346,7 +347,7 @@ module EeIdVerification
     # @param session [AuthenticationSession] The original session
     # @return [Boolean] true if response is valid
     # @private
-    def validate_browser_response(response, session)
+    def validate_browser_response(_response, _session)
       # TODO: Implement complete response validation
       # This would:
       # 1. Verify signature against original challenge
@@ -364,7 +365,7 @@ module EeIdVerification
     # @param response [Hash] Authentication response containing certificate data
     # @return [OpenSSL::X509::Certificate, nil] Parsed certificate or nil
     # @private
-    def extract_certificate_from_response(response)
+    def extract_certificate_from_response(_response)
       # TODO: Implement certificate extraction from browser response
       # Handle different certificate formats:
       # - PEM encoded strings

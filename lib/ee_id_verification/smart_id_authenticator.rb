@@ -83,8 +83,8 @@ module EeIdVerification
     #   )
     def initiate_authentication(params = {})
       validate_authentication_params!(params)
-      
-      session = AuthenticationSession.new(
+
+      AuthenticationSession.new(
         id: generate_session_id,
         method: :smart_id,
         status: :pending,
@@ -105,8 +105,6 @@ module EeIdVerification
       # 3. Receive session ID from service for status polling
       # 4. Store service session ID for later status checks
       # 5. Handle service-specific error conditions
-      
-      session
     end
 
     # Poll the Smart-ID service for authentication status.
@@ -144,7 +142,7 @@ module EeIdVerification
     #   end
     def poll_status(session)
       validate_session!(session)
-      
+
       # TODO: Implement complete Smart-ID service polling
       # This would:
       # 1. Query Smart-ID service with session ID
@@ -153,7 +151,7 @@ module EeIdVerification
       # 4. Extract personal data from certificate
       # 5. Validate certificate level (QUALIFIED vs ADVANCED)
       # 6. Perform certificate chain and OCSP validation
-      
+
       AuthenticationResult.new(
         session_id: session.id,
         status: :pending,
@@ -183,7 +181,7 @@ module EeIdVerification
     #   # Note: User may still see the request in Smart-ID app
     def cancel_authentication(session)
       validate_session!(session)
-      
+
       # TODO: Handle Smart-ID session cleanup
       # Smart-ID service doesn't support explicit cancellation,
       # so this only performs local cleanup:
@@ -191,7 +189,7 @@ module EeIdVerification
       # 2. Stop polling the service
       # 3. Clean up any cached data
       # Note: User may still receive notification in mobile app
-      
+
       true
     end
 
@@ -234,7 +232,7 @@ module EeIdVerification
       # 5. Validate certificate level (QUALIFIED vs ADVANCED)
       # 6. Check Smart-ID specific certificate policies
       # 7. Extract signer information from certificate
-      
+
       SignatureVerificationResult.new(
         valid: false,
         errors: ["Smart-ID signature verification not yet implemented"]
@@ -279,8 +277,8 @@ module EeIdVerification
         relying_party_name: "EE-ID Verification", # Shown in user's Smart-ID app
         verification_code_length: 4, # Standard verification code length
         certificate_level: "QUALIFIED", # QUALIFIED (legal) or ADVANCED (basic)
-        interaction_types: [:verification_code_choice, :display_text_and_pin],
-        allowed_countries: ["EE", "LV", "LT"] # Estonia, Latvia, Lithuania
+        interaction_types: %i[verification_code_choice display_text_and_pin],
+        allowed_countries: %w[EE LV LT] # Estonia, Latvia, Lithuania
       )
     end
 
@@ -293,29 +291,27 @@ module EeIdVerification
     # @raise [ArgumentError] If required configuration is missing or invalid
     def validate_config!
       super
-      
+
       # Only validate if actually configured (otherwise just mark unavailable)
       if config[:service_url] && config[:relying_party_uuid]
         unless %w[QUALIFIED ADVANCED].include?(config[:certificate_level])
           raise ArgumentError, "Invalid certificate level: must be QUALIFIED or ADVANCED"
         end
-        
+
         # Validate service URL format
         begin
           uri = URI.parse(config[:service_url])
-          unless uri.scheme == "https"
-            raise ArgumentError, "Smart-ID service URL must use HTTPS for security"
-          end
+          raise ArgumentError, "Smart-ID service URL must use HTTPS for security" unless uri.scheme == "https"
         rescue URI::InvalidURIError
           raise ArgumentError, "Invalid Smart-ID service URL format"
         end
       end
-      
+
       # Validate allowed countries
-      invalid_countries = config[:allowed_countries] - ["EE", "LV", "LT"]
-      unless invalid_countries.empty?
-        raise ArgumentError, "Invalid countries: #{invalid_countries.join(', ')}. Smart-ID supports EE, LV, LT only."
-      end
+      invalid_countries = config[:allowed_countries] - %w[EE LV LT]
+      return if invalid_countries.empty?
+
+      raise ArgumentError, "Invalid countries: #{invalid_countries.join(", ")}. Smart-ID supports EE, LV, LT only."
     end
 
     private
@@ -338,17 +334,19 @@ module EeIdVerification
       end
 
       if params[:country] && !config[:allowed_countries].include?(params[:country])
-        raise ArgumentError, "Country not supported: #{params[:country]}. Supported: #{config[:allowed_countries].join(', ')}"
+        raise ArgumentError,
+              "Country not supported: #{params[:country]}. Supported: #{config[:allowed_countries].join(", ")}"
       end
 
       if params[:interaction_type] && !config[:interaction_types].include?(params[:interaction_type])
-        raise ArgumentError, "Invalid interaction type: #{params[:interaction_type]}. Supported: #{config[:interaction_types].join(', ')}"
+        raise ArgumentError,
+              "Invalid interaction type: #{params[:interaction_type]}. Supported: #{config[:interaction_types].join(", ")}"
       end
-      
+
       # Validate document number format if provided
-      if params[:document_number] && !params[:document_number].match?(/^[A-Z0-9-]+$/)
-        raise ArgumentError, "Invalid document number format (expected alphanumeric with hyphens)"
-      end
+      return unless params[:document_number] && !params[:document_number].match?(/^[A-Z0-9-]+$/)
+
+      raise ArgumentError, "Invalid document number format (expected alphanumeric with hyphens)"
     end
 
     # Validate a Smart-ID authentication session.
@@ -402,7 +400,7 @@ module EeIdVerification
     end
 
     # Smart-ID specific helper methods
-    
+
     # Build authentication request for Smart-ID REST API.
     #
     # Creates the appropriate request structure based on the identifier type
@@ -454,7 +452,7 @@ module EeIdVerification
     def build_request_by_document_number(session)
       # Base request similar to personal code authentication
       base_request = build_request_by_personal_code(session)
-      
+
       # Document number is included in URL path, not request body
       # but we include it here for completeness
       base_request.merge(
@@ -492,17 +490,17 @@ module EeIdVerification
       when :verification_code_choice
         # Show verification code for user confirmation
         [
-          { 
-            type: "verificationCodeChoice", 
+          {
+            type: "verificationCodeChoice",
             displayText60: "Verification code: #{session.verification_code}"
           }
         ]
       when :display_text_and_pin
         # Show custom text and require PIN entry
         [
-          { 
-            type: "displayTextAndPIN", 
-            displayText200: display_text_for_session(session) 
+          {
+            type: "displayTextAndPIN",
+            displayText200: display_text_for_session(session)
           }
         ]
       else

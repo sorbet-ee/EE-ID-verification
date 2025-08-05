@@ -100,7 +100,7 @@ module EeIdVerification
     end
 
     def valid_at?(time = Time.now)
-      time >= not_before && time <= not_after
+      time.between?(not_before, not_after)
     end
 
     def expired?

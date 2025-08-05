@@ -24,7 +24,7 @@ module EeIdVerification
     # Common PKCS#11 library locations on macOS
     PKCS11_LIBRARY_PATHS = [
       "/opt/homebrew/lib/opensc-pkcs11.so",
-      "/opt/homebrew/lib/pkcs11/opensc-pkcs11.so", 
+      "/opt/homebrew/lib/pkcs11/opensc-pkcs11.so",
       "/usr/local/lib/opensc-pkcs11.so",
       "/usr/lib/opensc-pkcs11.so",
       "/opt/local/lib/opensc-pkcs11.so",
@@ -38,7 +38,7 @@ module EeIdVerification
     def initialize
       @pkcs11 = nil
       @auth_slot = nil
-      @sign_slot = nil  
+      @sign_slot = nil
       @auth_session = nil
       @sign_session = nil
       @connected = false
@@ -47,17 +47,15 @@ module EeIdVerification
     # Check if Estonian ID card is present
     # @return [Boolean] true if Estonian ID card is detected
     def card_present?
-      begin
-        load_pkcs11_library
-        return false unless @pkcs11
-        
-        slots = @pkcs11.slots(true)  # Only slots with tokens
-        esteid_slots = find_esteid_slots(slots)
-        
-        !esteid_slots.empty?
-      rescue
-        false
-      end
+      load_pkcs11_library
+      return false unless @pkcs11
+
+      slots = @pkcs11.slots(true) # Only slots with tokens
+      esteid_slots = find_esteid_slots(slots)
+
+      !esteid_slots.empty?
+    rescue StandardError
+      false
     end
 
     # Connect to the Estonian ID card
@@ -69,14 +67,14 @@ module EeIdVerification
 
       slots = @pkcs11.slots(true)
       esteid_slots = find_esteid_slots(slots)
-      
+
       raise "No Estonian ID card found" if esteid_slots.empty?
 
       # Find authentication and signing slots
       esteid_slots.each do |slot|
         token_info = slot.token_info
         label = token_info.label.strip
-        
+
         if label.include?("PIN1") || label.include?("Isikutuvastus") || label.downcase.include?("auth")
           @auth_slot = slot
         elsif label.include?("PIN2") || label.include?("Allkirjastamine") || label.downcase.include?("sign")
@@ -85,9 +83,7 @@ module EeIdVerification
       end
 
       # If we don't have distinct slots, use the first one for both
-      if !@auth_slot && !@sign_slot && esteid_slots.any?
-        @auth_slot = @sign_slot = esteid_slots.first
-      end
+      @auth_slot = @sign_slot = esteid_slots.first if !@auth_slot && !@sign_slot && esteid_slots.any?
 
       raise "Could not identify Estonian ID card slots" unless @auth_slot
 
@@ -97,16 +93,36 @@ module EeIdVerification
 
     # Disconnect from the card
     def disconnect
-      @auth_session&.logout rescue nil
-      @auth_session&.close rescue nil
-      @sign_session&.logout rescue nil
-      @sign_session&.close rescue nil
-      
+      begin
+        @auth_session&.logout
+      rescue StandardError
+        nil
+      end
+      begin
+        @auth_session&.close
+      rescue StandardError
+        nil
+      end
+      begin
+        @sign_session&.logout
+      rescue StandardError
+        nil
+      end
+      begin
+        @sign_session&.close
+      rescue StandardError
+        nil
+      end
+
       @auth_session = nil
       @sign_session = nil
       @connected = false
 
-      @pkcs11&.close rescue nil
+      begin
+        @pkcs11&.close
+      rescue StandardError
+        nil
+      end
       @pkcs11 = nil
     end
 
@@ -122,11 +138,9 @@ module EeIdVerification
     # @raise [RuntimeError] if PIN verification fails or certificate cannot be read
     def read_auth_certificate(pin)
       ensure_connected!
-      
+
       # Open authentication session if not already open
-      unless @auth_session
-        @auth_session = @auth_slot.open
-      end
+      @auth_session ||= @auth_slot.open
 
       # Login with PIN1
       begin
@@ -150,14 +164,12 @@ module EeIdVerification
     # @raise [RuntimeError] if PIN verification fails or certificate cannot be read
     def read_signing_certificate(pin)
       ensure_connected!
-      
+
       # Use signing slot if available, otherwise use auth slot
       slot = @sign_slot || @auth_slot
-      
+
       # Open signing session if not already open
-      unless @sign_session
-        @sign_session = slot.open
-      end
+      @sign_session ||= slot.open
 
       # Login with PIN2
       begin
@@ -182,10 +194,10 @@ module EeIdVerification
       subject_parts = certificate.subject.to_a
       subject_hash = {}
       subject_parts.each { |part| subject_hash[part[0]] = part[1] }
-      
+
       {
         given_name: subject_hash["GN"] || subject_hash["givenName"],
-        surname: subject_hash["SN"] || subject_hash["surname"], 
+        surname: subject_hash["SN"] || subject_hash["surname"],
         personal_code: extract_personal_code(subject_hash["serialNumber"]),
         country: subject_hash["C"] || subject_hash["countryName"],
         common_name: subject_hash["CN"] || subject_hash["commonName"]
@@ -196,13 +208,13 @@ module EeIdVerification
     # @param personal_code [String] 11-digit Estonian personal code
     # @return [Hash] parsed information with keys: :birth_date, :gender, :age
     def parse_personal_code(personal_code)
-      return {} unless personal_code && personal_code.match?(/^\d{11}$/)
-      
+      return {} unless personal_code&.match?(/^\d{11}$/)
+
       century_gender = personal_code[0].to_i
       year = personal_code[1..2].to_i
       month = personal_code[3..4].to_i
       day = personal_code[5..6].to_i
-      
+
       # Determine century and gender from first digit
       case century_gender
       when 1, 2
@@ -220,22 +232,22 @@ module EeIdVerification
       else
         return {}
       end
-      
+
       begin
         birth_year = century + year
         birth_date = Date.new(birth_year, month, day)
-        
+
         # Calculate age
         today = Date.today
         age = today.year - birth_date.year
         age -= 1 if today < Date.new(today.year, birth_date.month, birth_date.day)
-        
+
         {
           birth_date: birth_date,
           gender: gender,
           age: age
         }
-      rescue
+      rescue StandardError
         {}
       end
     end
@@ -254,14 +266,14 @@ module EeIdVerification
 
       @pkcs11 = self.class.shared_pkcs11_library
     end
-    
+
     # Get shared PKCS#11 library instance
     def self.shared_pkcs11_library
       @shared_pkcs11 ||= begin
         library_path = PKCS11_LIBRARY_PATHS.find { |path| File.exist?(path) }
         library_path ? PKCS11.open(library_path) : nil
       end
-    rescue => e
+    rescue StandardError
       # If library is already initialized by another process, return nil
       # This will cause card_present? to return false, which is safe
       nil
@@ -272,29 +284,27 @@ module EeIdVerification
     # @return [Array] Array of Estonian ID card slots
     def find_esteid_slots(slots)
       esteid_slots = []
-      
+
       slots.each do |slot|
-        begin
-          token_info = slot.token_info
-          label = token_info.label.strip
-          manufacturer = token_info.manufacturerID.strip
-          model = token_info.model.strip
-          
-          # Check if this looks like Estonian ID card
-          if label.include?("ESTEID") || 
-             manufacturer.include?("SK") ||
-             model.include?("PKCS#15") ||
-             label.match?(/PIN[12]/) ||
-             label.include?("Isikutuvastus") ||
-             label.include?("Allkirjastamine")
-            esteid_slots << slot
-          end
-        rescue
-          # Skip slots we can't read
-          next
+        token_info = slot.token_info
+        label = token_info.label.strip
+        manufacturer = token_info.manufacturerID.strip
+        model = token_info.model.strip
+
+        # Check if this looks like Estonian ID card
+        if label.include?("ESTEID") ||
+           manufacturer.include?("SK") ||
+           model.include?("PKCS#15") ||
+           label.match?(/PIN[12]/) ||
+           label.include?("Isikutuvastus") ||
+           label.include?("Allkirjastamine")
+          esteid_slots << slot
         end
+      rescue StandardError
+        # Skip slots we can't read
+        next
       end
-      
+
       esteid_slots
     end
 
@@ -307,39 +317,33 @@ module EeIdVerification
 
       # Find all certificate objects
       objects = session.find_objects(PKCS11::CKA_CLASS => PKCS11::CKO_CERTIFICATE)
-      
+
       objects.each do |obj|
-        begin
-          # Get certificate data
-          cert_der = obj[PKCS11::CKA_VALUE]
-          next unless cert_der
-          
-          cert = OpenSSL::X509::Certificate.new(cert_der)
-          
-          # Determine certificate type by key usage
-          key_usage = cert.extensions.find { |ext| ext.oid == "keyUsage" }
-          next unless key_usage
-          
-          usage_str = key_usage.value
-          
-          case type
-          when :authentication
-            # Authentication certificates have Digital Signature but not Non Repudiation
-            if usage_str.include?("Digital Signature") && !usage_str.include?("Non Repudiation")
-              return cert
-            end
-          when :signing
-            # Signing certificates have Non Repudiation
-            if usage_str.include?("Non Repudiation")
-              return cert  
-            end
-          end
-        rescue
-          # Skip certificates we can't parse
-          next
+        # Get certificate data
+        cert_der = obj[PKCS11::CKA_VALUE]
+        next unless cert_der
+
+        cert = OpenSSL::X509::Certificate.new(cert_der)
+
+        # Determine certificate type by key usage
+        key_usage = cert.extensions.find { |ext| ext.oid == "keyUsage" }
+        next unless key_usage
+
+        usage_str = key_usage.value
+
+        case type
+        when :authentication
+          # Authentication certificates have Digital Signature but not Non Repudiation
+          return cert if usage_str.include?("Digital Signature") && !usage_str.include?("Non Repudiation")
+        when :signing
+          # Signing certificates have Non Repudiation
+          return cert if usage_str.include?("Non Repudiation")
         end
+      rescue StandardError
+        # Skip certificates we can't parse
+        next
       end
-      
+
       nil
     end
 
@@ -349,10 +353,10 @@ module EeIdVerification
     # @return [String, nil] Personal code or nil if not found
     def extract_personal_code(serial_number)
       return nil unless serial_number
-      
+
       # Remove PNOEE- prefix if present
       if serial_number.start_with?("PNOEE-")
-        serial_number[6..-1]
+        serial_number[6..]
       else
         serial_number
       end

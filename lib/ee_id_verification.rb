@@ -4,6 +4,7 @@ require "securerandom"
 require_relative "ee_id_verification/version"
 require_relative "ee_id_verification/certificate_reader"
 require_relative "ee_id_verification/models"
+require_relative "ee_id_verification/web_eid_verifier"
 
 # Estonian ID card authentication library.
 #

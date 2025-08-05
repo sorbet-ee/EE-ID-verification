@@ -9,7 +9,7 @@
 # through OpenSC, providing secure authentication and personal data extraction.
 
 # Declare all targets as phony to avoid conflicts with files of same names
-.PHONY: help install test test_hardware run_local_card_test build clean
+.PHONY: help install test test_hardware run_local_card_test webeid_test build clean
 
 # Default target - shows help when just running 'make'
 help:
@@ -22,6 +22,7 @@ help:
 	@echo "  test                  Run unit tests (hardware tests skipped)"
 	@echo "  test_hardware         Run all tests including hardware integration"
 	@echo "  run_local_card_test   Interactive test with real Estonian ID card"
+	@echo "  webeid_test           Launch Web eID test app with HTTPS tunnel"
 	@echo "  build                 Build the gem package for distribution"
 	@echo "  clean                 Remove built gem files"
 	@echo ""
@@ -79,6 +80,28 @@ run_local_card_test:
 	@echo "     - You'll need your PIN1 (4 digits)"
 	@echo ""
 	ruby script/test_id_card.rb
+
+# Launch Web eID test application with HTTPS tunnel
+# This provides a web interface to test Web eID authentication with Estonian ID cards
+webeid_test:
+	@echo "🌐 Launching Web eID Test Application"
+	@echo "====================================="
+	@echo ""
+	@echo "This will start a web application for testing Web eID authentication:"
+	@echo "  1. Starts local HTTP server on port 4567"
+	@echo "  2. Creates secure HTTPS tunnel via Cloudflare"
+	@echo "  3. Provides web interface for ID card authentication"
+	@echo "  4. Tests real Web eID browser extension integration"
+	@echo ""
+	@echo "⚠️  Requirements:"
+	@echo "     - Estonian ID card inserted in reader"
+	@echo "     - Web eID browser extension installed"
+	@echo "     - Web eID native application installed"
+	@echo "     - Cloudflare tunnel (cloudflared) installed"
+	@echo ""
+	@echo "🚀 Starting Web eID test application..."
+	@echo ""
+	cd test/web_app && ./start.sh
 
 # Build the gem package for distribution
 # Creates .gem file that can be installed or published to RubyGems

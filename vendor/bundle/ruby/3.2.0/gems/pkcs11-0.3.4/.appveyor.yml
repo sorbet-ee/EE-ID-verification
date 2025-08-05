@@ -1,0 +1,44 @@
+image: Visual Studio 2019
+
+install:
+  - set PATH=C:/Ruby%ruby_version%/bin;c:/Program Files/Git/cmd;c:/Windows/system32;C:/Windows/System32/WindowsPowerShell/v1.0;C:/Program Files/Mercurial
+  - set RAKEOPT=-rdevkit
+  - set RUBYOPT=--verbose
+  - ps: |
+      if ($env:ruby_version -like "*head*") {
+        $(new-object net.webclient).DownloadFile("https://github.com/oneclick/rubyinstaller2/releases/download/rubyinstaller-head/rubyinstaller-$env:ruby_version.exe", "$pwd/ruby-setup.exe")
+        cmd /c ruby-setup.exe /verysilent /dir=C:/Ruby$env:ruby_version
+      }
+  - ridk version
+  - ridk exec sh -c "pacman -S --noconfirm --needed ${MINGW_PACKAGE_PREFIX}-gcc"
+  - gem --version
+  - bundle install
+
+  # We need a 32 or 64 bit softokn3.dll to test against.
+  # However it is not part of any installed software on Appveyor,
+  # so we download and install a 32 or 64 bit firefox version and use it's softokn3.dll.
+  - ps: |
+      if ($env:ruby_version -like "*x64*") {
+        $(new-object net.webclient).DownloadFile('http://ftp.mozilla.org/pub/firefox/releases/68.3.0esr/win64/en-US/Firefox%20Setup%2068.3.0esr.exe', 'C:/firefox-setup.exe')
+        $env:SOFTOKN_PATH = 'C:/Program Files/Mozilla Firefox/softokn3.dll'
+        $env:PATH = 'C:/Program Files/Mozilla Firefox;' + $env:PATH
+      } else {
+        $(new-object net.webclient).DownloadFile('http://ftp.mozilla.org/pub/firefox/releases/68.3.0esr/win32/en-US/Firefox%20Setup%2068.3.0esr.exe', 'C:/firefox-setup.exe')
+        $env:SOFTOKN_PATH = 'C:/Program Files (x86)/Mozilla Firefox/softokn3.dll'
+        $env:PATH = 'C:/Program Files (x86)/Mozilla Firefox;' + $env:PATH
+      }
+      cmd /c "C:/firefox-setup.exe" -ms
+
+build: off
+
+test_script:
+  - bundle exec rake compile test gem
+
+environment:
+  matrix:
+    - ruby_version: head-x64
+      RUBY_DLL_PATH: "C:/Program Files/Mozilla Firefox"
+    - ruby_version: "25"
+      RUBY_DLL_PATH: "C:/Program Files (x86)/Mozilla Firefox"
+    - ruby_version: "31-x64"
+      RUBY_DLL_PATH: "C:/Program Files/Mozilla Firefox"

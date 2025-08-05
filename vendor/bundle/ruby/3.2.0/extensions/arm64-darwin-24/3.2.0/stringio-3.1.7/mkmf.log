@@ -1,0 +1,35 @@
+have_type: checking for rb_io_mode_t in ruby/io.h... -------------------- no
+
+DYLD_LIBRARY_PATH=.:/Users/angelos/.rbenv/versions/3.2.6/lib "clang -o conftest -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0/arm64-darwin24 -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0/ruby/backward -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0 -I. -D_XOPEN_SOURCE -D_DARWIN_C_SOURCE -D_DARWIN_UNLIMITED_SELECT -D_REENTRANT   -fdeclspec -O3 -fno-fast-math -ggdb3 -Wall -Wextra -Wextra-tokens -Wdeprecated-declarations -Wdivision-by-zero -Wdiv-by-zero -Wimplicit-function-declaration -Wimplicit-int -Wmisleading-indentation -Wpointer-arith -Wshorten-64-to-32 -Wwrite-strings -Wold-style-definition -Wmissing-noreturn -Wno-cast-function-type -Wno-constant-logical-operand -Wno-long-long -Wno-missing-field-initializers -Wno-overlength-strings -Wno-parentheses-equality -Wno-self-assign -Wno-tautological-compare -Wno-unused-parameter -Wno-unused-value -Wunused-variable -Wundef  -fno-common -pipe conftest.c  -L. -L/Users/angelos/.rbenv/versions/3.2.6/lib -L. -fstack-protector-strong -L/opt/homebrew/opt/gmp/lib     -lruby.3.2  -lpthread  "
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+DYLD_LIBRARY_PATH=.:/Users/angelos/.rbenv/versions/3.2.6/lib "clang -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0/arm64-darwin24 -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0/ruby/backward -I/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0 -I. -D_XOPEN_SOURCE -D_DARWIN_C_SOURCE -D_DARWIN_UNLIMITED_SELECT -D_REENTRANT   -fdeclspec -O3 -fno-fast-math -ggdb3 -Wall -Wextra -Wextra-tokens -Wdeprecated-declarations -Wdivision-by-zero -Wdiv-by-zero -Wimplicit-function-declaration -Wimplicit-int -Wmisleading-indentation -Wpointer-arith -Wshorten-64-to-32 -Wwrite-strings -Wold-style-definition -Wmissing-noreturn -Wno-cast-function-type -Wno-constant-logical-operand -Wno-long-long -Wno-missing-field-initializers -Wno-overlength-strings -Wno-parentheses-equality -Wno-self-assign -Wno-tautological-compare -Wno-unused-parameter -Wno-unused-value -Wunused-variable -Wundef  -fno-common -pipe   -c conftest.c"
+conftest.c:6:9: error: unknown type name 'rb_io_mode_t'; did you mean 'rb_io_enc_t'?
+    6 | typedef rb_io_mode_t conftest_type;
+      |         ^~~~~~~~~~~~
+      |         rb_io_enc_t
+/Users/angelos/.rbenv/versions/3.2.6/include/ruby-3.2.0/ruby/io.h:233:28: note: 'rb_io_enc_t' declared here
+  233 | typedef struct rb_io_enc_t rb_io_enc_t;
+      |                            ^
+1 error generated.
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <ruby/io.h>
+4: 
+5: /*top*/
+6: typedef rb_io_mode_t conftest_type;
+7: int conftestval[sizeof(conftest_type)?1:-1];
+/* end */
+
+--------------------
+

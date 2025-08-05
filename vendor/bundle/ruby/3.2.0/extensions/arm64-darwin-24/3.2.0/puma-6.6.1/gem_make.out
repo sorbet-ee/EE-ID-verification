@@ -1,0 +1,44 @@
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/puma-6.6.1/ext/puma_http11
+/Users/angelos/.rbenv/versions/3.2.6/bin/ruby extconf.rb
+checking for BIO_read() in -llibcrypto... no
+checking for BIO_read() in -lcrypto... yes
+checking for SSL_CTX_new() in -lssl... yes
+checking for openssl/bio.h... yes
+
+──── Below are yes for 1.0.2 & later ────
+checking for DTLS_method() in openssl/ssl.h... yes
+checking for SSL_CTX_set_session_cache_mode(NULL, 0) in openssl/ssl.h... yes
+
+──── Below are yes for 1.1.0 & later ────
+checking for TLS_server_method() in openssl/ssl.h... yes
+checking for SSL_CTX_set_min_proto_version(NULL, 0) in openssl/ssl.h... yes
+
+──── Below is yes for 1.1.0 and later, but isn't documented until 3.0.0 ────
+checking for SSL_CTX_set_dh_auto(NULL, 0) in openssl/ssl.h... yes
+
+──── Below is yes for 1.1.1 & later ────
+checking for SSL_CTX_set_ciphersuites(NULL, "") in openssl/ssl.h... yes
+
+──── Below is yes for 3.0.0 & later ────
+checking for SSL_get1_peer_certificate() in openssl/ssl.h... yes
+
+checking for Random.bytes... yes
+creating Makefile
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/puma-6.6.1/ext/puma_http11
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-ar9kma sitelibdir\=./.gem.20250806-74828-ar9kma clean
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/puma-6.6.1/ext/puma_http11
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-ar9kma sitelibdir\=./.gem.20250806-74828-ar9kma
+compiling http11_parser.c
+compiling mini_ssl.c
+compiling puma_http11.c
+linking shared-object puma/puma_http11.bundle
+ld: warning: ignoring duplicate libraries: '-lruby.3.2'
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/puma-6.6.1/ext/puma_http11
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-ar9kma sitelibdir\=./.gem.20250806-74828-ar9kma install
+/usr/bin/install -c -m 0755 puma_http11.bundle ./.gem.20250806-74828-ar9kma/puma
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/puma-6.6.1/ext/puma_http11
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-ar9kma sitelibdir\=./.gem.20250806-74828-ar9kma clean

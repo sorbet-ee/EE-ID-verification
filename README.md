@@ -1,32 +1,18 @@
 # Estonian ID Card Authentication Library
 
-> A comprehensive Ruby library for secure Estonian ID card authentication using PKCS#11 interface  
-> **Version**: 1.0.0 | **Status**: Production Ready | **Coverage**: 100% | **Performance**: Enterprise Grade
+Ruby library for Estonian ID card authentication supporting both local card readers and Web eID browser-based authentication.
 
-## Release Notes
+## Authentication Methods
 
-### Version 1.0.0 - Local Authentication
-
-**Current Scope**: This version supports authentication with **locally connected Estonian ID cards only**. Cards must be physically inserted into a PC/SC compatible card reader connected to the server/machine running your application.
-
-**Authentication Methods Supported**:
+**Supported Methods**:
 - ✅ **Local DigiDoc** - Direct card reader access via PKCS#11
+- ✅ **Web eID** - Browser-based authentication using Web eID extension
 - ❌ **Mobile-ID** - Not yet implemented
-- ❌ **Smart-ID** - Not yet implemented  
-- ❌ **DigiDoc Browser** - Not yet implemented
+- ❌ **Smart-ID** - Not yet implemented
 
-**Future Roadmap**:
-- Mobile-ID authentication for remote smartphone-based auth
-- Smart-ID integration for app-based authentication
-- DigiDoc browser plugin support
-- Remote card reader support over network protocols
-
-**Current Limitations**:
-- Requires physical card reader hardware
-- Card must be locally connected to application server
-- No support for distributed/remote authentication scenarios
-
----
+**Local vs Web eID**:
+- **Local**: Requires card reader connected to server, works offline
+- **Web eID**: Uses browser extension, works remotely, requires HTTPS
 
 ## Overview
 
@@ -163,7 +149,7 @@ bundle install
 
 ## Quick Start
 
-### Basic Usage
+### Local Card Authentication
 
 ```ruby
 require 'ee_id_verification'
@@ -193,6 +179,48 @@ else
   puts "No Estonian ID card detected. Please insert card and try again."
 end
 ```
+
+### Web eID Authentication
+
+```ruby
+require 'ee_id_verification'
+
+# Server-side: Generate challenge
+challenge_nonce = SecureRandom.base64(32)
+
+# Client-side: Use web-eid.js to get auth token
+# const authToken = await webeid.authenticate(challengeNonce)
+
+# Server-side: Verify the authentication token
+verifier = EeIdVerification::WebEidVerifier.new
+result = verifier.verify_auth_token(auth_token, challenge_nonce)
+
+if result.success?
+  puts "Welcome, #{result.full_name}!"
+  puts "Personal code: #{result.personal_code}"
+else
+  puts "Authentication failed: #{result.error}"
+end
+```
+
+### Web eID Test Application
+
+Test Web eID authentication with a full web interface:
+
+```bash
+# Launch Web eID test app with HTTPS tunnel
+make webeid_test
+
+# Or manually:
+cd test/web_app
+./start.sh
+```
+
+The Web eID test application provides:
+- **HTTPS tunnel** via Cloudflare for Web eID compatibility
+- **Interactive web interface** for testing authentication
+- **Real ID card integration** with certificate reading
+- **Complete authentication flow** demonstration
 
 ### Advanced Example
 
@@ -371,6 +399,9 @@ make test_hardware
 
 # Interactive card test
 make run_local_card_test
+
+# Launch Web eID test application
+make webeid_test
 
 # Build gem package
 make build
@@ -568,71 +599,65 @@ make test
 
 ### Web Application Integration
 
-**Important**: In web applications, the card reader must be connected to the **server**, not the client browser. This library performs server-side authentication.
+#### Web eID (Recommended for web apps)
 
 ```ruby
 # Rails controller example
 class AuthController < ApplicationController
+  def challenge
+    nonce = SecureRandom.base64(32)
+    session[:nonce] = nonce
+    session[:nonce_created_at] = Time.now.to_i
+    
+    render json: { nonce: nonce }
+  end
+  
+  def login
+    auth_token = params[:authToken]
+    stored_nonce = session[:nonce]
+    
+    return render json: { error: "No challenge nonce" } unless stored_nonce
+    
+    if Time.now.to_i - session[:nonce_created_at] > 300
+      return render json: { error: "Challenge expired" }
+    end
+    
+    verifier = EeIdVerification::WebEidVerifier.new
+    result = verifier.verify_auth_token(auth_token, stored_nonce)
+    
+    if result.success?
+      session[:user_id] = find_or_create_user(result).id
+      render json: { success: true, user: { name: result.full_name } }
+    else
+      render json: { error: result.error }
+    end
+  end
+end
+```
+
+#### Local Card Authentication
+
+**Note**: For local card auth, the card reader must be connected to the **server**.
+
+```ruby
+class LocalAuthController < ApplicationController
   def initiate
     verifier = EeIdVerification.new
     
     unless verifier.available?
       return render json: { 
-        error: "No Estonian ID card detected on server",
-        message: "Please ensure card is inserted in server-side reader"
+        error: "No Estonian ID card detected on server"
       }
     end
     
     session = verifier.authenticate
     session[:auth_session_id] = session.id
     
-    render json: { 
-      session_id: session.id,
-      expires_at: session.expires_at
-    }
+    render json: { session_id: session.id }
   end
   
   def complete
-    session_id = session[:auth_session_id]
-    pin = params[:pin]
-    
-    # In production, store and retrieve session objects properly
-    session_obj = retrieve_session(session_id)
-    return render json: { error: "Session not found" } unless session_obj
-    
-    result = verifier.complete_authentication(session_obj, pin)
-    
-    if result.success?
-      user = find_or_create_user(result)
-      session[:user_id] = user.id
-      
-      render json: { 
-        success: true, 
-        user: {
-          name: result.full_name,
-          personal_code: result.personal_code,
-          country: result.country
-        }
-      }
-    else
-      render json: { error: result.error }
-    end
-  end
-  
-  private
-  
-  def find_or_create_user(result)
-    User.find_or_create_by(personal_code: result.personal_code) do |user|
-      user.name = result.full_name
-      user.country = result.country
-    end
-  end
-  
-  def retrieve_session(session_id)
-    # Implement proper session storage/retrieval
-    # This is a simplified example
-    @stored_sessions ||= {}
-    @stored_sessions[session_id]
+    # ... PIN verification logic
   end
 end
 ```

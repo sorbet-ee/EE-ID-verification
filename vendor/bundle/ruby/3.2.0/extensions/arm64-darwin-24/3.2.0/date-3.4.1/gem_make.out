@@ -1,0 +1,25 @@
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/date-3.4.1/ext/date
+/Users/angelos/.rbenv/versions/3.2.6/bin/ruby extconf.rb
+checking for rb_category_warn()... yes
+checking for timezone in time.h with  -Werror... yes
+checking for altzone in time.h with  -Werror... no
+creating Makefile
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/date-3.4.1/ext/date
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-1x7l8m sitelibdir\=./.gem.20250806-74828-1x7l8m clean
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/date-3.4.1/ext/date
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-1x7l8m sitelibdir\=./.gem.20250806-74828-1x7l8m
+compiling date_core.c
+compiling date_parse.c
+compiling date_strftime.c
+compiling date_strptime.c
+linking shared-object date_core.bundle
+ld: warning: ignoring duplicate libraries: '-lruby.3.2'
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/date-3.4.1/ext/date
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-1x7l8m sitelibdir\=./.gem.20250806-74828-1x7l8m install
+/usr/bin/install -c -m 0755 date_core.bundle ./.gem.20250806-74828-1x7l8m
+
+current directory: /Users/angelos/Desktop/repos/EE-ID-verification/vendor/bundle/ruby/3.2.0/gems/date-3.4.1/ext/date
+make DESTDIR\= sitearchdir\=./.gem.20250806-74828-1x7l8m sitelibdir\=./.gem.20250806-74828-1x7l8m clean

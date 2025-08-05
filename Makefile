@@ -1,7 +1,7 @@
 # EE-ID-verification Makefile
 # Estonian Identity Verification Gem
 
-.PHONY: help install test run_local_card_test build clean lint
+.PHONY: help install test run_local_card_test build clean lint validate
 
 # Default target
 help:
@@ -16,6 +16,7 @@ help:
 	@echo "  build                 Build the gem"
 	@echo "  clean                 Clean build artifacts"
 	@echo "  lint                  Run code linting"
+	@echo "  validate              Validate gemspec and dependencies"
 	@echo ""
 	@echo "Prerequisites:"
 	@echo "  - OpenSC installed (brew install opensc on macOS)"
@@ -65,6 +66,13 @@ lint:
 	ruby -c lib/ee_id_verification/certificate_reader.rb
 	ruby -c lib/ee_id_verification/digidoc_local_authenticator.rb
 	@echo "✅ Code syntax is valid"
+
+# Validate gemspec and dependencies
+validate:
+	@echo "🔍 Validating gemspec and dependencies..."
+	ruby -e "spec = Gem::Specification.load('ee-id-verification.gemspec'); puts '✅ Gemspec is valid'"
+	bundle install --quiet
+	@echo "✅ Dependencies resolve correctly"
 
 # Development setup
 setup: install

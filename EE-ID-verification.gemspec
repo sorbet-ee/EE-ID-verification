@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary = "Estonian identity verification for Ruby applications"
   spec.description = "A comprehensive Ruby gem for Estonian digital identity verification supporting DigiDoc, Mobile-ID, and Smart-ID authentication methods. Provides a unified interface for secure authentication and digital signature verification using Estonia's e-identity infrastructure."
-  spec.homepage = "https://github.com/[USERNAME]/EE-ID-verification"
+  spec.homepage = "https://github.com/sorbet-ee/EE-ID-verification"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/sorbet-ee/EE-ID-verification"
-  spec.metadata["changelog_uri"] = "https://github.com/sorbet-ee/EE-ID-verification/blob/master/CHANGELOG.md"
+  spec.metadata["changelog_uri"] = "https://github.com/sorbet-ee/EE-ID-verification/blob/main/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.

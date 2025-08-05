@@ -2,10 +2,7 @@ PATH
   remote: .
   specs:
     EE-ID-verification (0.1.0)
-      net-http (~> 0.3)
-      openssl (~> 3.0)
       pkcs11 (~> 0.3)
-      rexml (~> 3.2)
 
 GEM
   remote: https://rubygems.org/
@@ -22,9 +19,6 @@ GEM
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     minitest (5.25.5)
-    net-http (0.6.0)
-      uri
-    openssl (3.3.0)
     parallel (1.27.0)
     parser (3.3.9.0)
       ast (~> 2.4.1)
@@ -46,7 +40,6 @@ GEM
     regexp_parser (2.11.0)
     reline (0.6.2)
       io-console (~> 0.5)
-    rexml (3.4.1)
     rubocop (1.79.2)
       json (~> 2.3)
       language_server-protocol (~> 3.17.0.2)
@@ -66,7 +59,6 @@ GEM
     unicode-display_width (3.1.4)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
-    uri (1.0.3)
 
 PLATFORMS
   aarch64-linux-gnu

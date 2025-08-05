@@ -1,117 +1,98 @@
-# EE-ID-verification Makefile
-# Estonian Identity Verification Gem
+# Estonian ID Card Authentication - Development Makefile
+# =====================================================
+#
+# This Makefile provides convenient development commands for the Estonian ID
+# card authentication library. It handles dependency management, testing,
+# building, and provides easy access to hardware testing with real cards.
+#
+# The library uses PKCS#11 interface to communicate with Estonian ID cards
+# through OpenSC, providing secure authentication and personal data extraction.
 
-.PHONY: help install test test_hardware run_local_card_test build clean lint validate
+# Declare all targets as phony to avoid conflicts with files of same names
+.PHONY: help install test test_hardware run_local_card_test build clean
 
-# Default target
+# Default target - shows help when just running 'make'
 help:
-	@echo "EE-ID-verification - Estonian Identity Verification Gem"
-	@echo "====================================================="
+	@echo "Estonian ID Card Authentication"
+	@echo "==============================="
 	@echo ""
 	@echo "Available targets:"
 	@echo "  help                   Show this help message"
-	@echo "  install               Install gem dependencies"
-	@echo "  test                  Run all tests (hardware tests skipped without HARDWARE_TESTS=1)"
-	@echo "  test_hardware         Run all tests including hardware integration (requires card)"
-	@echo "  run_local_card_test   Test Estonian ID card reading (requires card inserted)"
-	@echo "  build                 Build the gem"
-	@echo "  clean                 Clean build artifacts"
-	@echo "  lint                  Run code linting"
-	@echo "  validate              Validate gemspec and dependencies"
+	@echo "  install               Install Ruby dependencies via Bundler"
+	@echo "  test                  Run unit tests (hardware tests skipped)"
+	@echo "  test_hardware         Run all tests including hardware integration"
+	@echo "  run_local_card_test   Interactive test with real Estonian ID card"
+	@echo "  build                 Build the gem package for distribution"
+	@echo "  clean                 Remove built gem files"
 	@echo ""
-	@echo "Prerequisites:"
+	@echo "Prerequisites for hardware testing:"
 	@echo "  - OpenSC installed (brew install opensc on macOS)"
-	@echo "  - Estonian ID card inserted in reader"
-	@echo "  - Card reader connected"
+	@echo "  - Estonian ID card inserted in reader" 
+	@echo "  - PC/SC card reader connected and working"
+	@echo "  - PIN1 available for authentication"
 
-# Install dependencies
+# Install Ruby dependencies using Bundler
+# This ensures all required gems are available for development and testing
 install:
-	@echo "📦 Installing gem dependencies..."
+	@echo "📦 Installing Ruby dependencies..."
+	@echo "   This will install: pkcs11 gem and development dependencies"
 	bundle install
 	@echo "✅ Dependencies installed successfully"
 
-# Run the Estonian ID card test
-run_local_card_test:
-	@echo "🔍 Testing Estonian ID Card"
-	@echo "=========================="
+# Run basic test suite without hardware requirements
+# Skips tests that require actual Estonian ID card insertion
+test:
+	@echo "🧪 Running unit tests..."
+	@echo "   Hardware tests are skipped unless HARDWARE_TESTS=1 is set"
+	@echo "   This tests: API, models, personal code parsing, basic functionality"
+	bundle exec ruby -Ilib:test test/ee_id_verification_test.rb
+	@echo "✅ Unit tests completed"
+
+# Run complete test suite including hardware integration tests
+# Requires physical Estonian ID card and will prompt for PIN entry
+test_hardware:
+	@echo "🧪 Running complete test suite with hardware integration..."
+	@echo "⚠️  This requires:"
+	@echo "     - Estonian ID card inserted in reader"
+	@echo "     - Working PC/SC card reader"
+	@echo "     - Your PIN1 for authentication testing"
 	@echo ""
-	@echo "Prerequisites check:"
-	@echo "- Estonian ID card should be inserted"
-	@echo "- Card reader should be connected"
-	@echo "- You'll need your PIN1 (4 digits) when prompted"
+	@echo "   The test will prompt you to enter your PIN1 when needed"
+	HARDWARE_TESTS=1 bundle exec ruby -Ilib:test test/ee_id_verification_test.rb
+	@echo "✅ Hardware integration tests completed"
+
+# Interactive test with real Estonian ID card
+# This is the simplest way to verify everything works with your card
+run_local_card_test:
+	@echo "🔍 Testing Estonian ID Card (Interactive)"
+	@echo "========================================="
+	@echo ""
+	@echo "This will attempt to:"
+	@echo "  1. Detect your Estonian ID card"
+	@echo "  2. Connect via PKCS#11 interface"
+	@echo "  3. Prompt for your PIN1"
+	@echo "  4. Read and display your personal information"
+	@echo ""
+	@echo "⚠️  Requirements:"
+	@echo "     - Estonian ID card must be inserted"
+	@echo "     - Card reader must be connected"
+	@echo "     - You'll need your PIN1 (4 digits)"
 	@echo ""
 	ruby script/test_id_card.rb
 
-# Run all tests
-test:
-	@echo "🧪 Running comprehensive test suite..."
-	@echo "📋 Test suite includes:"
-	@echo "  - Models and data structures (test/models_test.rb)"
-	@echo "  - Certificate reader with PKCS#11 integration (test/certificate_reader_test.rb)"
-	@echo "  - DigiDoc Local authenticator with real hardware (test/digidoc_local_authenticator_test.rb)"
-	@echo "  - End-to-end integration tests (test/verifier_integration_test.rb)"
-	@echo ""
-	@echo "⚠️  Hardware tests require Estonian ID card and ENV['HARDWARE_TESTS']=1"
-	@echo ""
-	bundle exec ruby -I lib:test test/models_test.rb
-	bundle exec ruby -I lib:test test/certificate_reader_test.rb
-	bundle exec ruby -I lib:test test/digidoc_local_authenticator_test.rb
-	bundle exec ruby -I lib:test test/verifier_integration_test.rb
-	@echo "✅ All tests completed"
-
-# Run all tests including hardware integration
-test_hardware:
-	@echo "🧪 Running comprehensive test suite with hardware integration..."
-	@echo "📋 Hardware tests will run - Estonian ID card required!"
-	@echo ""
-	@echo "Prerequisites:"
-	@echo "  - Estonian ID card inserted in reader"
-	@echo "  - Card reader connected and working"
-	@echo "  - OpenSC installed (brew install opensc)"
-	@echo "  - You'll need your PIN1 for authentication tests"
-	@echo ""
-	@read -p "Press Enter to continue or Ctrl+C to cancel..."
-	HARDWARE_TESTS=1 bundle exec ruby -I lib:test test/models_test.rb
-	HARDWARE_TESTS=1 bundle exec ruby -I lib:test test/certificate_reader_test.rb
-	HARDWARE_TESTS=1 bundle exec ruby -I lib:test test/digidoc_local_authenticator_test.rb
-	HARDWARE_TESTS=1 bundle exec ruby -I lib:test test/verifier_integration_test.rb
-	@echo "✅ All tests including hardware integration completed"
-
-# Build the gem
+# Build the gem package for distribution
+# Creates .gem file that can be installed or published to RubyGems
 build:
-	@echo "🔨 Building gem..."
+	@echo "🔨 Building gem package..."
+	@echo "   This creates EE-ID-verification-x.x.x.gem file"
 	gem build ee-id-verification.gemspec
 	@echo "✅ Gem built successfully"
+	@echo "   Install locally with: gem install *.gem"
+	@echo "   Publish with: gem push *.gem"
 
-# Clean build artifacts
+# Clean up built artifacts
+# Removes any .gem files created during build process
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	rm -f *.gem
-	@echo "✅ Cleaned successfully"
-
-# Lint code (syntax and warnings check)
-lint:
-	@echo "🔍 Linting code..."
-	ruby -w -c lib/ee_id_verification.rb
-	ruby -w -c lib/ee_id_verification/certificate_reader.rb
-	ruby -w -c lib/ee_id_verification/digidoc_local_authenticator.rb
-	ruby -w -c lib/ee_id_verification/models.rb
-	ruby -w -c lib/ee_id_verification/base_authenticator.rb
-	@echo "✅ Code syntax is valid with no warnings"
-
-# Validate gemspec and dependencies
-validate:
-	@echo "🔍 Validating gemspec and dependencies..."
-	ruby -e "spec = Gem::Specification.load('ee-id-verification.gemspec'); puts '✅ Gemspec is valid'"
-	bundle install --quiet
-	@echo "✅ Dependencies resolve correctly"
-
-# Development setup
-setup: install
-	@echo "🚀 Development environment ready!"
-	@echo ""
-	@echo "To test your Estonian ID card:"
-	@echo "  make run_local_card_test"
-	@echo ""
-	@echo "To build the gem:"
-	@echo "  make build"
+	@echo "✅ Cleanup completed"

@@ -545,7 +545,7 @@ module EeIdVerification
         end
         
         true
-      rescue => e
+      rescue
         # OCSP service unreachable - fail safely
         # In production, consider caching previous OCSP responses
         false

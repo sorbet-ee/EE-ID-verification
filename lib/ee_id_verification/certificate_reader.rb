@@ -2,6 +2,7 @@
 
 require "openssl"
 require "pkcs11"
+require "date"
 
 module EeIdVerification
   # PKCS#11-based Estonian ID card certificate reader.
@@ -54,7 +55,7 @@ module EeIdVerification
         esteid_slots = find_esteid_slots(slots)
         
         !esteid_slots.empty?
-      rescue => e
+      rescue
         false
       end
     end
@@ -247,14 +248,23 @@ module EeIdVerification
       raise "Not connected to card. Call connect() first." unless connected?
     end
 
-    # Load PKCS#11 library
+    # Load PKCS#11 library (shared across all instances)
     def load_pkcs11_library
       return if @pkcs11
 
-      library_path = PKCS11_LIBRARY_PATHS.find { |path| File.exist?(path) }
-      return unless library_path
-
-      @pkcs11 = PKCS11.open(library_path)
+      @pkcs11 = self.class.shared_pkcs11_library
+    end
+    
+    # Get shared PKCS#11 library instance
+    def self.shared_pkcs11_library
+      @shared_pkcs11 ||= begin
+        library_path = PKCS11_LIBRARY_PATHS.find { |path| File.exist?(path) }
+        library_path ? PKCS11.open(library_path) : nil
+      end
+    rescue => e
+      # If library is already initialized by another process, return nil
+      # This will cause card_present? to return false, which is safe
+      nil
     end
 
     # Find Estonian ID card slots
@@ -279,7 +289,7 @@ module EeIdVerification
              label.include?("Allkirjastamine")
             esteid_slots << slot
           end
-        rescue => e
+        rescue
           # Skip slots we can't read
           next
         end
@@ -324,7 +334,7 @@ module EeIdVerification
               return cert  
             end
           end
-        rescue => e
+        rescue
           # Skip certificates we can't parse
           next
         end

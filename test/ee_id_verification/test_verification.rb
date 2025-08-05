@@ -7,7 +7,8 @@ class EeIdVerification::TestVerification < Minitest::Test
     refute_nil ::EeIdVerification::VERSION
   end
 
-  def test_it_does_something_useful
-    assert false
+  def test_it_can_create_verifier
+    verifier = EeIdVerification.new
+    assert_instance_of EeIdVerification::Verifier, verifier
   end
 end

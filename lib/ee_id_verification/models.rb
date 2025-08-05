@@ -131,11 +131,60 @@ module EeIdVerification
     end
   end
 
-  # Custom errors
+  # Custom exception classes for Estonian e-identity verification.
+  #
+  # Provides a hierarchy of specific exceptions that can be caught and handled
+  # appropriately by calling applications. Each exception type indicates a
+  # specific category of problem that may require different handling.
+
+  # Base exception class for all e-identity verification errors.
+  #
+  # All other custom exceptions inherit from this class, allowing callers
+  # to catch all library-specific errors with a single rescue clause.
   class VerificationError < StandardError; end
+
+  # Configuration-related errors.
+  #
+  # Raised when required configuration is missing, invalid, or incompatible.
+  # These errors typically occur during initialization and indicate setup problems.
+  #
+  # @example
+  #   raise ConfigurationError, "Mobile-ID service URL is required"
   class ConfigurationError < VerificationError; end
+
+  # Authentication process errors.
+  #
+  # Raised when authentication fails due to user actions, invalid credentials,
+  # or service-side problems during the authentication process.
+  #
+  # @example
+  #   raise AuthenticationError, "Invalid PIN - authentication failed"
   class AuthenticationError < VerificationError; end
+
+  # Authentication timeout errors.
+  #
+  # Specific type of authentication error that occurs when users don't
+  # complete authentication within the configured timeout period.
+  #
+  # @example
+  #   raise TimeoutError, "User did not respond within 300 seconds"
   class TimeoutError < AuthenticationError; end
+
+  # Certificate-related errors.
+  #
+  # Raised when certificate validation fails, certificates are expired,
+  # revoked, or otherwise invalid for the requested operation.
+  #
+  # @example
+  #   raise CertificateError, "Certificate has been revoked"
   class CertificateError < VerificationError; end
+
+  # Service availability errors.
+  #
+  # Raised when external services (Mobile-ID, Smart-ID, OCSP) are unavailable
+  # or not properly configured for use.
+  #
+  # @example
+  #   raise ServiceUnavailableError, "Mobile-ID service is not available"
   class ServiceUnavailableError < VerificationError; end
 end

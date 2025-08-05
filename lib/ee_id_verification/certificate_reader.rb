@@ -1,251 +1,351 @@
 # frozen_string_literal: true
 
 require "openssl"
-require "smartcard"
+require "pkcs11"
 
 module EeIdVerification
-  # Handles reading certificates from Estonian ID cards
+  # PKCS#11-based Estonian ID card certificate reader.
+  #
+  # This class provides access to Estonian ID cards through the PKCS#11 interface,
+  # which is the standard and recommended approach for Estonian ID cards.
+  # It replaces the raw smartcard API approach with proper PKCS#11 token access.
+  #
+  # @example Basic usage
+  #   reader = CertificateReader.new
+  #   if reader.card_present?
+  #     reader.connect
+  #     cert = reader.read_auth_certificate("1234")  # PIN1
+  #     personal_data = reader.extract_personal_data(cert)
+  #     puts "User: #{personal_data[:given_name]} #{personal_data[:surname]}"
+  #     reader.disconnect
+  #   end
   class CertificateReader
-    # Estonian ID card ATR (Answer To Reset) patterns
-    ESTEID_ATRS = [
-      "3BFE1800008031FE45803180664090A4162A00830F9000EF", # EstEID 3.5 (2011)
-      "3BFA1800008031FE45FE654944202F20504B4903",         # EstEID 3.5 (2018)
-      "3BFE1800008031FE45803180664090A4561D0083119000EF", # EstEID 2018+
-      "3BDB960080B1FE451F830012233F536549440F900066"      # EstEID Digi-ID
+    # Common PKCS#11 library locations on macOS
+    PKCS11_LIBRARY_PATHS = [
+      "/opt/homebrew/lib/opensc-pkcs11.so",
+      "/opt/homebrew/lib/pkcs11/opensc-pkcs11.so", 
+      "/usr/local/lib/opensc-pkcs11.so",
+      "/usr/lib/opensc-pkcs11.so",
+      "/opt/local/lib/opensc-pkcs11.so",
+      "/System/Library/OpenSC/lib/opensc-pkcs11.so",
+      "/usr/local/lib/pkcs11/opensc-pkcs11.so"
     ].freeze
 
-    # Certificate file IDs on Estonian ID card
-    AUTH_CERT_FID = [0xAA, 0xCE]  # Authentication certificate
-    SIGN_CERT_FID = [0xDD, 0xCE]  # Signing certificate
+    attr_reader :pkcs11, :auth_slot, :sign_slot, :auth_session, :sign_session
 
-    # APDU commands
-    SELECT_MASTER_FILE = [0x00, 0xA4, 0x00, 0x0C]  # SELECT MF
-    SELECT_FILE = [0x00, 0xA4, 0x02, 0x04]         # SELECT by FID
-    READ_BINARY = [0x00, 0xB0]                      # READ BINARY
-
-    attr_reader :context, :card, :readers
-
+    # Initialize the PKCS#11 certificate reader
     def initialize
-      @context = Smartcard::PCSC::Context.new
-      @readers = @context.readers
-      @card = nil
-    end
-
-    # List available card readers
-    def list_readers
-      @readers
+      @pkcs11 = nil
+      @auth_slot = nil
+      @sign_slot = nil  
+      @auth_session = nil
+      @sign_session = nil
+      @connected = false
     end
 
     # Check if Estonian ID card is present
+    # @return [Boolean] true if Estonian ID card is detected
     def card_present?
-      return false if @readers.empty?
-
-      @readers.any? do |reader|
-        begin
-          card_info = @context.card_status(reader)
-          card_info[:state].include?(:present) && esteid_card?(card_info[:atr])
-        rescue Smartcard::PCSC::Exception
-          false
-        end
+      begin
+        load_pkcs11_library
+        return false unless @pkcs11
+        
+        slots = @pkcs11.slots(true)  # Only slots with tokens
+        esteid_slots = find_esteid_slots(slots)
+        
+        !esteid_slots.empty?
+      rescue => e
+        false
       end
     end
 
-    # Connect to the ID card
+    # Connect to the Estonian ID card
+    # @return [Boolean] true if successfully connected
+    # @raise [RuntimeError] if no Estonian ID card found
     def connect
-      reader = find_reader_with_card
-      raise "No Estonian ID card found" unless reader
+      load_pkcs11_library
+      raise "PKCS#11 library not available" unless @pkcs11
 
-      @card = @context.connect(reader)
-      reset_card
+      slots = @pkcs11.slots(true)
+      esteid_slots = find_esteid_slots(slots)
+      
+      raise "No Estonian ID card found" if esteid_slots.empty?
+
+      # Find authentication and signing slots
+      esteid_slots.each do |slot|
+        token_info = slot.token_info
+        label = token_info.label.strip
+        
+        if label.include?("PIN1") || label.include?("Isikutuvastus") || label.downcase.include?("auth")
+          @auth_slot = slot
+        elsif label.include?("PIN2") || label.include?("Allkirjastamine") || label.downcase.include?("sign")
+          @sign_slot = slot
+        end
+      end
+
+      # If we don't have distinct slots, use the first one for both
+      if !@auth_slot && !@sign_slot && esteid_slots.any?
+        @auth_slot = @sign_slot = esteid_slots.first
+      end
+
+      raise "Could not identify Estonian ID card slots" unless @auth_slot
+
+      @connected = true
       true
     end
 
     # Disconnect from the card
     def disconnect
-      @card&.disconnect
-      @card = nil
+      @auth_session&.logout rescue nil
+      @auth_session&.close rescue nil
+      @sign_session&.logout rescue nil
+      @sign_session&.close rescue nil
+      
+      @auth_session = nil
+      @sign_session = nil
+      @connected = false
+
+      @pkcs11&.close rescue nil
+      @pkcs11 = nil
     end
 
-    # Read authentication certificate
-    def read_auth_certificate
+    # Check if connected to a card
+    # @return [Boolean] true if connected
+    def connected?
+      @connected && @pkcs11 && @auth_slot
+    end
+
+    # Read authentication certificate with PIN1
+    # @param pin [String] PIN1 (typically 4 digits)
+    # @return [OpenSSL::X509::Certificate] authentication certificate
+    # @raise [RuntimeError] if PIN verification fails or certificate cannot be read
+    def read_auth_certificate(pin)
       ensure_connected!
-      cert_der = read_certificate_file(AUTH_CERT_FID)
-      OpenSSL::X509::Certificate.new(cert_der)
+      
+      # Open authentication session if not already open
+      unless @auth_session
+        @auth_session = @auth_slot.open
+      end
+
+      # Login with PIN1
+      begin
+        @auth_session.login(PKCS11::CKU_USER, pin)
+      rescue PKCS11::CKR_PIN_INCORRECT
+        raise "Invalid PIN1 - authentication failed"
+      rescue PKCS11::CKR_PIN_LOCKED
+        raise "PIN1 is blocked - too many incorrect attempts"
+      end
+
+      # Find authentication certificate
+      cert = find_certificate_by_type(:authentication)
+      raise "Authentication certificate not found" unless cert
+
+      cert
     end
 
-    # Read signing certificate
-    def read_sign_certificate
+    # Read signing certificate with PIN2
+    # @param pin [String] PIN2 (typically 5+ digits)
+    # @return [OpenSSL::X509::Certificate] signing certificate
+    # @raise [RuntimeError] if PIN verification fails or certificate cannot be read
+    def read_signing_certificate(pin)
       ensure_connected!
-      cert_der = read_certificate_file(SIGN_CERT_FID)
-      OpenSSL::X509::Certificate.new(cert_der)
+      
+      # Use signing slot if available, otherwise use auth slot
+      slot = @sign_slot || @auth_slot
+      
+      # Open signing session if not already open
+      unless @sign_session
+        @sign_session = slot.open
+      end
+
+      # Login with PIN2
+      begin
+        @sign_session.login(PKCS11::CKU_USER, pin)
+      rescue PKCS11::CKR_PIN_INCORRECT
+        raise "Invalid PIN2 - signing failed"
+      rescue PKCS11::CKR_PIN_LOCKED
+        raise "PIN2 is blocked - too many incorrect attempts"
+      end
+
+      # Find signing certificate
+      cert = find_certificate_by_type(:signing)
+      raise "Signing certificate not found" unless cert
+
+      cert
     end
 
-    # Extract personal data from authentication certificate
+    # Extract personal data from certificate
+    # @param certificate [OpenSSL::X509::Certificate] X.509 certificate
+    # @return [Hash] personal data hash with keys: :given_name, :surname, :personal_code, :country, :common_name
     def extract_personal_data(certificate)
-      subject = certificate.subject.to_a
+      subject_parts = certificate.subject.to_a
+      subject_hash = {}
+      subject_parts.each { |part| subject_hash[part[0]] = part[1] }
       
       {
-        given_name: extract_field(subject, "GN"),
-        surname: extract_field(subject, "SN"),
-        personal_code: extract_field(subject, "serialNumber"),
-        country: extract_field(subject, "C"),
-        common_name: extract_field(subject, "CN")
+        given_name: subject_hash["GN"] || subject_hash["givenName"],
+        surname: subject_hash["SN"] || subject_hash["surname"], 
+        personal_code: extract_personal_code(subject_hash["serialNumber"]),
+        country: subject_hash["C"] || subject_hash["countryName"],
+        common_name: subject_hash["CN"] || subject_hash["commonName"]
       }
     end
 
-    # Perform authentication with PIN1
-    def authenticate(pin1)
-      ensure_connected!
+    # Parse Estonian personal code for additional information
+    # @param personal_code [String] 11-digit Estonian personal code
+    # @return [Hash] parsed information with keys: :birth_date, :gender, :age
+    def parse_personal_code(personal_code)
+      return {} unless personal_code && personal_code.match?(/^\d{11}$/)
       
-      # Verify PIN1 (authentication PIN)
-      verify_pin(0x01, pin1)
+      century_gender = personal_code[0].to_i
+      year = personal_code[1..2].to_i
+      month = personal_code[3..4].to_i
+      day = personal_code[5..6].to_i
       
-      # Return authentication certificate for further processing
-      read_auth_certificate
-    end
-
-    # Perform signing with PIN2
-    def sign(data, pin2)
-      ensure_connected!
+      # Determine century and gender from first digit
+      case century_gender
+      when 1, 2
+        century = 1800
+        gender = century_gender == 1 ? "Male" : "Female"
+      when 3, 4
+        century = 1900
+        gender = century_gender == 3 ? "Male" : "Female"
+      when 5, 6
+        century = 2000
+        gender = century_gender == 5 ? "Male" : "Female"
+      when 7, 8
+        century = 2100
+        gender = century_gender == 7 ? "Male" : "Female"
+      else
+        return {}
+      end
       
-      # Verify PIN2 (signing PIN)
-      verify_pin(0x02, pin2)
-      
-      # Create signature (simplified - actual implementation would use proper padding)
-      # This is a placeholder - real implementation needs proper PKCS#1 padding
-      signing_cert = read_sign_certificate
-      
-      {
-        signature: create_signature(data),
-        certificate: signing_cert
-      }
+      begin
+        birth_year = century + year
+        birth_date = Date.new(birth_year, month, day)
+        
+        # Calculate age
+        today = Date.today
+        age = today.year - birth_date.year
+        age -= 1 if today < Date.new(today.year, birth_date.month, birth_date.day)
+        
+        {
+          birth_date: birth_date,
+          gender: gender,
+          age: age
+        }
+      rescue
+        {}
+      end
     end
 
     private
 
+    # Ensure we're connected to a card
+    # @raise [RuntimeError] if not connected
     def ensure_connected!
-      raise "Not connected to card" unless @card
+      raise "Not connected to card. Call connect() first." unless connected?
     end
 
-    def find_reader_with_card
-      @readers.find do |reader|
+    # Load PKCS#11 library
+    def load_pkcs11_library
+      return if @pkcs11
+
+      library_path = PKCS11_LIBRARY_PATHS.find { |path| File.exist?(path) }
+      return unless library_path
+
+      @pkcs11 = PKCS11.open(library_path)
+    end
+
+    # Find Estonian ID card slots
+    # @param slots [Array] Array of PKCS#11 slots
+    # @return [Array] Array of Estonian ID card slots
+    def find_esteid_slots(slots)
+      esteid_slots = []
+      
+      slots.each do |slot|
         begin
-          card_info = @context.card_status(reader)
-          card_info[:state].include?(:present) && esteid_card?(card_info[:atr])
-        rescue Smartcard::PCSC::Exception
-          false
+          token_info = slot.token_info
+          label = token_info.label.strip
+          manufacturer = token_info.manufacturerID.strip
+          model = token_info.model.strip
+          
+          # Check if this looks like Estonian ID card
+          if label.include?("ESTEID") || 
+             manufacturer.include?("SK") ||
+             model.include?("PKCS#15") ||
+             label.match?(/PIN[12]/) ||
+             label.include?("Isikutuvastus") ||
+             label.include?("Allkirjastamine")
+            esteid_slots << slot
+          end
+        rescue => e
+          # Skip slots we can't read
+          next
         end
       end
+      
+      esteid_slots
     end
 
-    def esteid_card?(atr)
-      atr_hex = atr.map { |b| "%02X" % b }.join
-      ESTEID_ATRS.include?(atr_hex)
-    end
+    # Find certificate by type (authentication or signing)
+    # @param type [Symbol] :authentication or :signing
+    # @return [OpenSSL::X509::Certificate, nil] certificate or nil if not found
+    def find_certificate_by_type(type)
+      session = type == :authentication ? @auth_session : (@sign_session || @auth_session)
+      return nil unless session
 
-    def reset_card
-      # Select Master File (root)
-      response = @card.transmit(SELECT_MASTER_FILE + [0x00])
-      check_response(response)
-    end
-
-    def read_certificate_file(fid)
-      # Select the certificate file
-      response = @card.transmit(SELECT_FILE + [0x02] + fid + [0x00])
-      check_response(response)
+      # Find all certificate objects
+      objects = session.find_objects(PKCS11::CKA_CLASS => PKCS11::CKO_CERTIFICATE)
       
-      # Read the file size from FCI
-      file_size = parse_file_size(response)
-      
-      # Read the certificate in chunks
-      cert_data = []
-      offset = 0
-      
-      while offset < file_size
-        chunk_size = [file_size - offset, 255].min
-        response = @card.transmit(
-          READ_BINARY + 
-          [offset >> 8, offset & 0xFF] + 
-          [chunk_size]
-        )
-        
-        check_response(response)
-        cert_data.concat(response[0...-2])  # Remove SW bytes
-        offset += chunk_size
+      objects.each do |obj|
+        begin
+          # Get certificate data
+          cert_der = obj[PKCS11::CKA_VALUE]
+          next unless cert_der
+          
+          cert = OpenSSL::X509::Certificate.new(cert_der)
+          
+          # Determine certificate type by key usage
+          key_usage = cert.extensions.find { |ext| ext.oid == "keyUsage" }
+          next unless key_usage
+          
+          usage_str = key_usage.value
+          
+          case type
+          when :authentication
+            # Authentication certificates have Digital Signature but not Non Repudiation
+            if usage_str.include?("Digital Signature") && !usage_str.include?("Non Repudiation")
+              return cert
+            end
+          when :signing
+            # Signing certificates have Non Repudiation
+            if usage_str.include?("Non Repudiation")
+              return cert  
+            end
+          end
+        rescue => e
+          # Skip certificates we can't parse
+          next
+        end
       end
       
-      cert_data.pack("C*")
+      nil
     end
 
-    def parse_file_size(fci_response)
-      # Simple FCI parser - looks for file size in tag 0x80
-      data = fci_response[0...-2]  # Remove SW bytes
+    # Extract personal code from certificate serial number
+    # Estonian certificates store personal code in serialNumber field with PNOEE- prefix
+    # @param serial_number [String] Serial number from certificate
+    # @return [String, nil] Personal code or nil if not found
+    def extract_personal_code(serial_number)
+      return nil unless serial_number
       
-      # Find tag 0x80 (file size)
-      idx = data.index(0x80)
-      return 0 unless idx
-      
-      len = data[idx + 1]
-      size = 0
-      
-      len.times do |i|
-        size = (size << 8) | data[idx + 2 + i]
-      end
-      
-      size
-    end
-
-    def verify_pin(pin_ref, pin)
-      pin_bytes = pin.chars.map(&:ord)
-      
-      # Pad PIN to 12 bytes with 0xFF
-      while pin_bytes.length < 12
-        pin_bytes << 0xFF
-      end
-      
-      # VERIFY command
-      response = @card.transmit(
-        [0x00, 0x20, 0x00, pin_ref] + 
-        [pin_bytes.length] + 
-        pin_bytes
-      )
-      
-      check_response(response)
-    end
-
-    def create_signature(data)
-      # This is a placeholder - actual signing would require:
-      # 1. Proper PKCS#1 padding
-      # 2. MSE (Manage Security Environment) commands
-      # 3. PSO (Perform Security Operation) commands
-      # For now, return a dummy signature
-      "\x00" * 256
-    end
-
-    def check_response(response)
-      return if response.empty?
-      
-      sw1 = response[-2]
-      sw2 = response[-1]
-      sw = (sw1 << 8) | sw2
-      
-      case sw
-      when 0x9000
-        # Success
-      when 0x6300
-        raise "PIN verification failed"
-      when 0x6983
-        raise "Authentication method blocked"
-      when 0x6A82
-        raise "File not found"
+      # Remove PNOEE- prefix if present
+      if serial_number.start_with?("PNOEE-")
+        serial_number[6..-1]
       else
-        raise "Card error: SW=#{sw.to_s(16)}"
+        serial_number
       end
-    end
-
-    def extract_field(subject, field_name)
-      field = subject.find { |f| f[0] == field_name }
-      field ? field[1] : nil
     end
   end
 end

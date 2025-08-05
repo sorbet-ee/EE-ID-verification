@@ -14,6 +14,20 @@ This gem provides a unified interface for verifying Estonian digital identities 
 - Personal data extraction (name, personal code, etc.)
 - Session management for authentication flows
 
+## Prerequisites
+
+For Estonian ID card support, you need OpenSC installed:
+
+**macOS:**
+```bash
+brew install opensc
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install opensc-pkcs11
+```
+
 ## Installation
 
 Install the gem and add to the application's Gemfile by executing:
@@ -26,6 +40,18 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 ```bash
 gem install EE-ID-verification
+```
+
+## Quick Start
+
+After installation, you can quickly test your Estonian ID card:
+
+```bash
+# Install dependencies
+make install
+
+# Test your Estonian ID card (requires card inserted)
+make run_local_card_test
 ```
 
 ## Usage
@@ -57,10 +83,19 @@ smart_auth = verifier.smart_id_auth(
   personal_code: '38001010101'
 )
 
-# DigiDoc (ID-card) authentication
-digidoc_auth = verifier.digidoc_auth(
-  certificate: user_provided_certificate
-)
+# DigiDoc (ID-card) authentication - requires card reader and Estonian ID card
+if verifier.method_available?(:digidoc_local)
+  session = verifier.digidoc_local_auth
+  # User will be prompted for PIN1 via provide_pin method
+  verifier.provide_pin(session.id, "1234")  # User's PIN1
+  result = verifier.poll_status(session)
+  
+  if result.authenticated?
+    puts "ID card authentication successful!"
+    puts "Name: #{result.full_name}"
+    puts "Personal code: #{result.personal_code}"
+  end
+end
 ```
 
 ### Configuration
@@ -101,26 +136,12 @@ The `script/` directory contains utility scripts for testing ID card functionali
    - Linux: `sudo systemctl start pcscd`
    - Windows: Smart Card service
 
-### Available Scripts
+### Testing Your Estonian ID Card
 
-#### Test Card Reader
 ```bash
-ruby script/test_card_reader.rb
+make run_local_card_test
 ```
-Tests connectivity and detects Estonian ID cards.
-
-#### Read ID Card Data
-```bash
-ruby script/read_id_card.rb
-```
-Reads personal information and optionally authenticates with PIN1.
-
-#### Extract Certificates
-```bash
-ruby script/extract_certificates.rb        # Display certificate info
-ruby script/extract_certificates.rb --save  # Save certificates to files
-```
-Extracts authentication and signing certificates from the ID card.
+This command will test your Estonian ID card and display all available information.
 
 ### Security Notes
 - **PIN codes are sensitive** - never share or store them
@@ -129,9 +150,42 @@ Extracts authentication and signing certificates from the ID card.
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+This gem uses a Makefile for common development tasks:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```bash
+# Show all available commands
+make help
+
+# Install dependencies
+make install
+
+# Test Estonian ID card (requires card inserted)
+make run_local_card_test
+
+# Run basic tests
+make test
+
+# Build the gem
+make build
+
+# Clean build artifacts
+make clean
+
+# Check code syntax
+make lint
+```
+
+### Development Setup
+
+1. Clone the repository
+2. Run `make setup` to install dependencies
+3. Insert your Estonian ID card
+4. Run `make run_local_card_test` to verify everything works
+
+The test will display your card's information including:
+- Personal name and code
+- Certificate validity dates
+- Birth date, gender, and age (parsed from personal code)
 
 ## Contributing
 

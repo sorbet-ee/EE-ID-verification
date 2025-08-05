@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Dependencies for ID card reading and certificate handling
-  spec.add_dependency "smartcard", "~> 0.5"  # PC/SC smart card interface
+  spec.add_dependency "pkcs11", "~> 0.3"     # PKCS#11 interface for Estonian ID cards
   spec.add_dependency "openssl", "~> 3.0"    # Certificate handling
   spec.add_dependency "net-http", "~> 0.3"   # HTTP client for OCSP
   spec.add_dependency "rexml", "~> 3.2"      # XML parsing for certificates

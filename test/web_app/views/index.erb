@@ -211,9 +211,14 @@
         }
         
         /**
-         * Display a status message
-         * @param {string} message - The message to display
+         * Display a status message to the user
+         * 
+         * Creates colored status messages for user feedback during operations.
+         * Messages are also logged to console for debugging purposes.
+         * 
+         * @param {string} message - The message to display to the user
          * @param {string} type - Message type: 'info', 'success', 'error', or 'warning'
+         *                       Determines the visual styling and console log level
          */
         function showMessage(message, type = 'info') {
             const messages = document.getElementById('messages');
@@ -225,7 +230,10 @@
         }
         
         /**
-         * Clear all status messages
+         * Clear all status messages and results from the UI
+         * 
+         * Called before starting new operations to provide a clean slate
+         * for status updates and results display.
          */
         function clearMessages() {
             document.getElementById('messages').innerHTML = '';
@@ -233,8 +241,12 @@
         }
         
         /**
-         * Display result data in formatted JSON
-         * @param {object} data - The data to display
+         * Display detailed result data in formatted JSON
+         * 
+         * Shows structured data from Web eID operations (certificates, tokens, etc.)
+         * in a readable format. Useful for debugging and verification.
+         * 
+         * @param {object} data - The data object to display (certificate, auth token, etc.)
          */
         function showResult(data) {
             document.getElementById('results').innerHTML = `
@@ -246,13 +258,22 @@
         }
         
         /**
-         * Check if Web eID extension is available
+         * Check if Web eID extension is available and functional
+         * 
+         * Performs comprehensive checks of the Web eID browser extension:
+         * 1. Verifies extension API is injected into window.webeid
+         * 2. Checks all required function methods are available
+         * 3. Tests communication with native application
+         * 4. Displays detailed status information to the user
+         * 
+         * This is useful for diagnosing Web eID configuration issues.
          */
         function checkExtension() {
             clearMessages();
             console.log('Checking for Web eID extension...');
             
-            // Check various aspects of the extension
+            // Check various aspects of the extension API
+            // These checks verify that all required Web eID functions are available
             const checks = {
                 'Extension installed': typeof window.webeid !== 'undefined',
                 'Extension is object': typeof window.webeid === 'object',
@@ -268,7 +289,8 @@
                 showMessage('✅ Web eID extension is available!', 'success');
                 showMessage(`Available functions: ${Object.keys(window.webeid).join(', ')}`, 'info');
                 
-                // Try to get detailed status
+                // Try to get detailed status from the extension
+                // This tests communication with the native application
                 window.webeid.status()
                     .then(status => {
                         showMessage(`Library: ${status.library}, Extension: ${status.extension}, Native App: ${status.nativeApp}`, 'success');
@@ -286,11 +308,21 @@
         }
         
         /**
-         * Get certificate from the ID card
+         * Get signing certificate from the Estonian ID card
+         * 
+         * This function demonstrates certificate reading functionality:
+         * 1. Calls the Web eID extension to access the card reader
+         * 2. Prompts user to select certificate (if multiple available)
+         * 3. Reads the X.509 certificate containing user's public key
+         * 4. Returns certificate data including supported signature algorithms
+         * 
+         * The certificate contains personal information encoded in X.509 fields
+         * and can be used for digital signatures or identity verification.
          */
         async function getCertificate() {
             clearMessages();
             
+            // Verify Web eID extension is available before proceeding
             if (!window.webeid) {
                 showMessage('Web eID extension not available', 'error');
                 return;
@@ -300,6 +332,8 @@
                 showMessage('Reading certificate from ID card...', 'info');
                 showMessage('Please make sure your ID card is inserted in the reader', 'info');
                 
+                // Call Web eID extension to retrieve signing certificate
+                // This will prompt for certificate selection if multiple are available
                 const result = await window.webeid.getSigningCertificate({ lang: 'en' });
                 showMessage('✅ Certificate retrieved successfully', 'success');
                 showResult(result);
@@ -308,7 +342,7 @@
                 console.error('Get certificate error:', error);
                 showMessage(`❌ Failed to read certificate: ${error.message}`, 'error');
                 
-                // Provide helpful error messages
+                // Provide user-friendly error messages based on Web eID error codes
                 if (error.code === 'ERR_WEBEID_USER_CANCELLED') {
                     showMessage('You cancelled the operation', 'warning');
                 } else if (error.code === 'ERR_WEBEID_NO_CERTIFICATES') {
@@ -323,6 +357,7 @@
                     showMessage('Web eID extension blocked this operation - try refreshing the page', 'error');
                 }
                 
+                // Show detailed error information for debugging
                 showResult({
                     error: error.message,
                     code: error.code
@@ -331,7 +366,19 @@
         }
         
         /**
-         * Authenticate with the ID card
+         * Authenticate with the ID card using challenge-response protocol
+         * 
+         * This function implements the complete Web eID authentication flow:
+         * 1. Requests a challenge nonce from the server
+         * 2. Uses Web eID extension to sign the nonce with the ID card
+         * 3. Sends the signed authentication token to server for verification
+         * 4. Displays the authenticated user information on success
+         * 
+         * The process requires:
+         * - Web eID extension installed and running
+         * - Estonian ID card inserted in reader
+         * - User's PIN1 code for authentication
+         * - HTTPS connection for security
          */
         async function authenticate() {
             clearMessages();
@@ -401,7 +448,11 @@
         }
         
         /**
-         * Logout the current user
+         * Logout the current user and clear session
+         * 
+         * Sends a logout request to the server to invalidate the current session,
+         * then updates the UI to hide user information and show authentication
+         * controls again. Uses CSRF token for secure logout request.
          */
         async function logout() {
             try {
@@ -421,8 +472,16 @@
         }
         
         /**
-         * Display authenticated user information
-         * @param {object} user - User data from server
+         * Display authenticated user information in the UI
+         * 
+         * Updates the user interface to show the authenticated user's details
+         * and hides authentication controls. The user data comes from the
+         * server after successful authentication and verification.
+         * 
+         * @param {object} user - User data object from server containing:
+         *                       - full_name: User's full name from ID card
+         *                       - personal_code: Estonian personal identification code
+         *                       - country: Country code (typically 'EE' for Estonia)
          */
         function showUserInfo(user) {
             document.getElementById('user-name').textContent = user.full_name || 'N/A';
@@ -433,7 +492,11 @@
         }
         
         /**
-         * Hide user information and show auth controls
+         * Hide user information and restore authentication interface
+         * 
+         * Called during logout to reset the UI back to the authentication
+         * state. Hides the user info panel and shows the authentication
+         * buttons so the user can authenticate again if needed.
          */
         function hideUserInfo() {
             document.getElementById('status-info').style.display = 'none';
@@ -441,7 +504,17 @@
         }
         
         /**
-         * Initialize the application when DOM is ready
+         * Initialize the Web eID authentication application
+         * 
+         * This initialization function runs when the DOM is fully loaded and:
+         * 1. Displays environment information for debugging
+         * 2. Fetches CSRF token for secure API requests
+         * 3. Checks if user is already authenticated (session restore)
+         * 4. Detects Web eID extension availability
+         * 5. Sets up the initial UI state
+         * 
+         * The initialization ensures the application is ready for authentication
+         * operations and provides helpful feedback about the current state.
          */
         window.addEventListener('DOMContentLoaded', async () => {
             console.log('=== Web eID Test Application Started ===');

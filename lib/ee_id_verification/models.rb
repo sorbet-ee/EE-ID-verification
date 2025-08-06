@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "securerandom"
-
 module EeIdVerification
   # Authentication session model for Estonian ID card authentication workflow.
   #
@@ -35,7 +33,7 @@ module EeIdVerification
   #     created_at: Time.now,
   #     expires_at: Time.now + 300  # 5 minutes
   #   )
-  #   
+  #
   #   # Check if session is still valid
   #   if session.expired?
   #     puts "Session expired, please try again"
@@ -44,7 +42,7 @@ module EeIdVerification
     # Session attributes for tracking authentication state
     # @!attribute [rw] id
     #   @return [String] Unique session identifier (typically UUID)
-    # @!attribute [rw] method  
+    # @!attribute [rw] method
     #   @return [Symbol] Authentication method used (:digidoc_local)
     # @!attribute [rw] status
     #   @return [Symbol] Current session status (:waiting_for_pin, :completed, :failed, :expired)
@@ -131,7 +129,7 @@ module EeIdVerification
   #     surname: "MAASIKAS",
   #     country: "EE"
   #   )
-  #   
+  #
   #   if result.success?
   #     puts "Welcome, #{result.full_name}!"
   #     log_successful_login(result.personal_code)
@@ -139,12 +137,12 @@ module EeIdVerification
   #
   # @example Failed authentication result
   #   result = AuthenticationResult.new(
-  #     session_id: "auth-456", 
+  #     session_id: "auth-456",
   #     status: :failed,
   #     authenticated: false,
   #     error: "Invalid PIN1"
   #   )
-  #   
+  #
   #   if result.failure?
   #     puts "Authentication failed: #{result.error}"
   #   end
@@ -162,7 +160,7 @@ module EeIdVerification
     #   @return [String, nil] Estonian 11-digit personal identification code
     # @!attribute [rw] given_name
     #   @return [String, nil] User's first/given name from certificate
-    # @!attribute [rw] surname  
+    # @!attribute [rw] surname
     #   @return [String, nil] User's family/last name from certificate
     # @!attribute [rw] country
     #   @return [String, nil] Country code from certificate (typically "EE")
@@ -195,7 +193,7 @@ module EeIdVerification
       attributes.each do |key, value|
         send("#{key}=", value) if respond_to?("#{key}=")
       end
-      
+
       # Ensure authenticated defaults to false for security
       # Authentication must be explicitly set to true to be considered successful
       @authenticated ||= false
@@ -255,9 +253,9 @@ module EeIdVerification
     # @return [String, nil] Full name or nil if no name components available
     # @example
     #   result.given_name = "MARI"
-    #   result.surname = "MAASIKAS"  
+    #   result.surname = "MAASIKAS"
     #   puts result.full_name  # => "MARI MAASIKAS"
-    #   
+    #
     #   result.given_name = nil
     #   result.surname = "MAASIKAS"
     #   puts result.full_name  # => "MAASIKAS"

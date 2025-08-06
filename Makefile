@@ -108,7 +108,7 @@ webeid_test:
 build:
 	@echo "🔨 Building gem package..."
 	@echo "   This creates EE-ID-verification-x.x.x.gem file"
-	gem build ee-id-verification.gemspec
+	gem build EE-ID-verification.gemspec
 	@echo "✅ Gem built successfully"
 	@echo "   Install locally with: gem install *.gem"
 	@echo "   Publish with: gem push *.gem"

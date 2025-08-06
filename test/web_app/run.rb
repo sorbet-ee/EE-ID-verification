@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # Web eID Test Server
-# 
+#
 # Simple HTTP server for Web eID testing that runs the Sinatra application
 # for use with Cloudflare tunnel. The tunnel provides HTTPS termination.
 
@@ -15,7 +15,7 @@ puts ""
 
 # Run the Sinatra app on HTTP (tunnel will provide HTTPS)
 WebEidTestApp.run!(
-  port: 4567, 
+  port: 4567,
   bind: "0.0.0.0",
   environment: :development
 )

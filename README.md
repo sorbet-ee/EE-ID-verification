@@ -768,6 +768,12 @@ MIT License - See LICENSE file for details.
 - **Ruby Community**: For the excellent ecosystem
 - **Contributors**: Everyone who helped improve this library
 
+## About
+
+This gem has been developed by **Sorbeet Payments OU** (commercial name "Sorbet").
+
+For any inquiries, please contact Angelos at angelos@sorbet.ee
+
 ---
 
 > "The best way to predict the future is to invent it." — Alan Kay

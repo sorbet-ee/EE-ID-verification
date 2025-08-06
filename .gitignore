@@ -1,8 +1,56 @@
+# Bundler
 /.bundle/
+/vendor/
+
+# Documentation
 /.yardoc
 /_yardoc/
-/coverage/
 /doc/
+
+# Coverage reports
+/coverage/
+
+# Build artifacts
 /pkg/
+*.gem
+
+# Test artifacts
 /spec/reports/
 /tmp/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ruby version managers
+.ruby-version
+.ruby-gemset
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+
+# Environment configuration
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+Icon?
+.AppleDouble
+.LSOverride

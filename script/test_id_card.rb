@@ -22,7 +22,32 @@ def format_certificate_field(name, value)
   end
 end
 
-def get_card_hardware_info
+def display_demographics(personal_info, personal_code)
+  return unless personal_info[:birth_date]
+
+  birth_year = personal_info[:birth_date].year
+  generation = case birth_year
+               when 1946..1964 then "Baby Boomer"
+               when 1965..1980 then "Generation X"
+               when 1981..1996 then "Millennial"
+               when 1997..2012 then "Generation Z"
+               else "Generation Alpha"
+               end
+  format_certificate_field("Generation", generation)
+
+  # Century calculation
+  century_code = personal_code[0].to_i
+  century_info = case century_code
+                 when 1, 2 then "19th century (1800-1899)"
+                 when 3, 4 then "20th century (1900-1999)"
+                 when 5, 6 then "21st century (2000-2099)"
+                 when 7, 8 then "22nd century (2100-2199)"
+                 else "Unknown century"
+                 end
+  format_certificate_field("Birth Century", century_info)
+end
+
+def card_hardware_info
   # Get PKCS#11 library and slots directly
   library = EeIdVerification::CertificateReader.shared_pkcs11_library
   return { error: "PKCS#11 library not available" } unless library
@@ -73,7 +98,7 @@ puts "✅ Estonian ID card detected"
 
 # Get hardware information before authentication
 print_section("Card Reader & Hardware Information")
-hardware_info = get_card_hardware_info
+hardware_info = card_hardware_info
 
 if hardware_info[:error]
   puts "⚠️  Could not retrieve hardware info: #{hardware_info[:error]}"
@@ -113,28 +138,7 @@ if result.success?
       format_certificate_field("Age", "#{personal_info[:age]} years")
 
       # Calculate additional demographics
-      if personal_info[:birth_date]
-        birth_year = personal_info[:birth_date].year
-        generation = case birth_year
-                     when 1946..1964 then "Baby Boomer"
-                     when 1965..1980 then "Generation X"
-                     when 1981..1996 then "Millennial"
-                     when 1997..2012 then "Generation Z"
-                     else "Generation Alpha"
-                     end
-        format_certificate_field("Generation", generation)
-
-        # Century calculation
-        century_code = result.personal_code[0].to_i
-        century_info = case century_code
-                       when 1, 2 then "19th century (1800-1899)"
-                       when 3, 4 then "20th century (1900-1999)"
-                       when 5, 6 then "21st century (2000-2099)"
-                       when 7, 8 then "22nd century (2100-2199)"
-                       else "Unknown century"
-                       end
-        format_certificate_field("Birth Century", century_info)
-      end
+      display_demographics(personal_info, result.personal_code)
     end
   end
 
